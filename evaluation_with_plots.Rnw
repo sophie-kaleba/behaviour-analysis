@@ -1,0 +1,301 @@
+%!TEX root = paper.tex
+<<knitr-load, echo=FALSE, include=FALSE>>=
+if (Sys.getenv("RSTUDIO") == "1") {
+    setwd("/home/sopi/Documents/Side_projects/behaviour-analysis/")
+} else {
+   opts_chunk$set(
+    fig.path="./figure/",
+    fig.keep='all',
+    dev=c('tikz'), #dev='pdf',c('tikz', 'svg'),
+    dev.args=list(pointsize=8, timestamp = FALSE),
+    echo=FALSE,
+    external=FALSE,
+    tidy=FALSE)
+
+  ## Make sure that TikZDevice is used for measuring size of latex labels
+  options(device = function(...) tikzDevice::tikz(tempfile(), ...))
+}
+
+#install.packages("reshape2", repos='http://cran.us.r-project.org')
+#install.packages("htmlTable", repos='http://cran.us.r-project.org')
+#install.packages("networkD3", repos='http://cran.us.r-project.org')
+library(reshape2)
+library(ggplot2)
+library(data.table)
+library(dplyr)
+library(stringr)
+library(xtable)
+library(htmlTable)
+library(networkD3)
+library(R.utils)
+
+source("./scripts/libraries.R", chdir=TRUE)
+source("./scripts/paper.R", chdir=TRUE)
+source("./scripts/phase-data-processing.R", chdir=TRUE)
+source("./scripts/machine_specs.R", chdir=TRUE)
+
+data <- read_splitting_profiling_file(filename)
+  
+############################################## STATISTICS ############################################## 
+  
+data <- data %>% 
+    dplyr::filter(!(Source.Section=="")) %>% 
+    tibble::rowid_to_column(var="Call.ID")
+
+# summarized table to have a idea of the polymorphic call sites
+total <- data %>%
+  group_by(Source.Section, CT.Address) %>%
+  dplyr::mutate(Num.Targets = n_distinct(Receiver))
+
+# to filter out by the number of targets and only keep polymoprhic call-sites
+filtered <- total %>%
+  filter(Num.Targets >= 2)
+
+# distribution for each call site, pick the most represented receiver by call-site
+# TODO - I think this is overly too complex
+distrib_per_call_site <- filtered %>%
+  group_by(Source.Section, CT.Address, Receiver) %>%
+  dplyr::summarise(n_calls = n()) %>%
+  dplyr::mutate(Weight.Frequent.Receiver = round(n_calls/sum(n_calls),3)*100) %>%
+  dplyr::arrange(desc(n_calls)) %>%
+  group_by(Source.Section) %>%
+  dplyr::mutate(Num.Calls.Per.SS = sum(n_calls)) %>%
+  dplyr::mutate(Times.splitted = n_distinct(CT.Address)) %>%
+  dplyr::arrange(desc(Num.Calls.Per.SS),  CT.Address, Source.Section, desc(n_calls)) 
+
+# to get data on the distribution of polymoprhism
+data_summary_num_targets <- total %>%
+  group_by(Num.Targets, Source.Section) %>%
+  dplyr::summarise("Num.Call.Sites"=n_distinct(Num.Targets))  %>%
+  dplyr::select(Num.Targets, Num.Call.Sites) %>%
+  dplyr::count(Num.Targets, name="Num.Call.Sites") %>%
+  mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites))))
+
+# to get an idea of the most executed call-sites
+most_executed <- total %>%
+  group_by(Source.Section, Receiver, Symbol) %>%
+  dplyr::summarise(Num.Calls = n()) %>%
+  dplyr::arrange(desc(Num.Calls))
+most_executed$Receiver <- str_trunc(most_executed$Receiver, 25, "center") #truncate the receiver label just so it fits on the table
+
+# Selection of most optimizable poly|megamorphic call sites (lots of calls)
+table_optimizable <- distrib_per_call_site %>%
+  group_by(Source.Section) %>%
+  #filter(row_number()==1) %>% #former hack to deal with primitive calls
+  tibble::rowid_to_column(var="Rank")
+table_optimizable_aux <- data.frame(table_optimizable)
+table_optimizable_aux$Source.Section <- str_trunc(table_optimizable_aux$Source.Section, 25, "center") #truncate the receiver label just so it fits on the table
+
+# number of split per call site
+split_call_site <- total %>%
+  group_by(Source.Section) %>%
+  dplyr::summarise(Times.splitted = n_distinct(CT.Address)) %>%
+  dplyr::arrange(desc(Times.splitted))
+split_call_site$Source.Section <- str_trunc(split_call_site$Source.Section, 25, "center")
+
+split_call_site_more <- split_call_site %>%
+    filter(Times.splitted > 1)
+
+############################################## TABLE GENERATION ############################################## 
+
+distrib_ct_table <- xtable(data_summary_num_targets, caption = "Distribution of call-targets")
+distrib_ct_table <- autoformat(distrib_ct_table, zap = getOption("digits"))
+
+hottest_mega_ct_table <- xtable(table_optimizable_aux, caption = "Hottest megamorphic call sites")
+hottest_mega_ct_table <- autoformat(hottest_mega_ct_table, zap = getOption("digits"))
+
+hottest_30mega_ct_table <- xtable(head(table_optimizable_aux,30), caption = "Hottest megamorphic call sites")
+hottest_30mega_ct_table <- autoformat(hottest_30mega_ct_table, zap = getOption("digits"))
+
+distrib_split_per_ct_table <- xtable(split_call_site, caption = "Distribution of splits per target")
+distrib_split_per_ct_table <- autoformat(distrib_split_per_ct_table, zap = getOption("digits"))
+
+distrib_2plus_split_per_ct_table <- xtable(split_call_site_more, caption = "Distribution of splits per target")
+distrib_2plus_split_per_ct_table <- autoformat(distrib_2plus_split_per_ct_table, zap = getOption("digits"))
+
+most_executed <- xtable(head(most_executed, 35), caption = "Most executed call-sites")
+most_executed <- autoformat(most_executed, zap = getOption("digits"))
+
+
+############################################## SUMMARY TABLE GENERATION ACCORDING TO CACHE TYPE ############################################## 
+
+total_per_cache_type <- total %>%
+  group_by(Source.Section) %>%
+  dplyr::mutate(Num.Targets = n_distinct(Receiver)) %>%
+  dplyr::mutate(Cache.Type = case_when(Num.Targets == 1 ~ "MONO",
+                                       Num.Targets > 1 && Num.Targets <= 8 ~ "POLY",
+                                       Num.Targets > 8 ~ "MEGA"))
+
+total_per_cache_type <- total_per_cache_type %>%
+  group_by(Cache.Type) %>%
+  dplyr::summarise(Num.Calls = n(), Num.Call.Sites = n_distinct(Source.Section), Times.splitted = n_distinct(CT.Address))
+
+cachetab <- xtable(total_per_cache_type, caption = "Summary per cache type")
+cachetab <- autoformat(cachetab, zap = getOption("digits"))
+
+############################################## SUMMARY TABLE GENERATION ACCORDING TO CALL TYPE ############################################## 
+
+total_per_call_type <- total %>%
+  group_by(Builtin.) %>%
+  dplyr::summarise(Num.Calls = n(), Num.Call.Sites = n_distinct(Source.Section), Times.splitted = n_distinct(CT.Address))
+
+calltab <- xtable(total_per_call_type, caption = "Summary per call type")
+calltab <- autoformat(calltab, zap = getOption("digits"))
+
+############################################## PLOT GENERATION - FACET ##############################################
+
+plot_calls <- function(ss, rec) {
+  filtered_data <- filtered %>% filter(Source.Section == ss)
+p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=Receiver, color=Receiver)) + geom_point(size = 0.5, alpha = 0.4) 
+p <- p + facet_wrap( ~CT.Address, scales = "free", ncol = 3) + xlab("Call ID") + ylab("Target") + theme(legend.position = "none") + ggtitle(paste("Selector: ",filtered_data$Symbol, ", in source: ", filtered_data$Source.Section))
+    p <- p + theme(text = element_text(size=10)) 
+ return (p)
+}
+
+f <- function(row) {
+  ss <- row['Source.Section']
+  rec <- row['Receiver']
+  rank <- row['Rank']
+  p_ <- plot_calls(ss, rec)
+  ss <- gsub("*/","_",ss) # replace the / in the name otherwise the file cannot be created
+  ggsave(p_, path=now, filename=paste(rank,"_",ss,"_plot.png", sep=""), height = 300, width = 500, units="mm")
+}
+
+# create the directory
+now <- format(Sys.time(), "%b%d-%Y_%X")
+now <- paste("results",now,sep="/")
+dir.create(now)
+
+# if there are no polymorphic call-sites, no need to generate those graphs 
+# WIP - supposed to exclude primitive call, be not great
+if (nrow(filtered) != 0) {
+apply(table_optimizable %>%
+  filter(Rank > 1 && Rank < 32), 1, f) 
+}
+
+# this folder is now hlding the latest ran analysis
+createLink(link="latest", target=now, overwrite=TRUE)
+
+############################################## PLOT GENERATION - ##############################################
+
+plot_calls_sub <- function(ss) {
+  filtered_data <- filtered %>% filter(Source.Section == ss)
+  dir_name = paste(now,ss,sep="/")
+  dir.create(dir_name)
+  for (addr in unique(filtered_data$CT.Address)) {
+    filtered_data_addr <- filtered %>% filter(Source.Section == ss) %>% filter(CT.Address == addr) 
+    p <- ggplot(data = filtered_data_addr, aes(x=as.numeric(as.character(Call.ID)), y=Receiver, color=Receiver)) + geom_point(size = 0.5, alpha = 0.4) 
+    p <- p  + xlab("Call ID") + ylab("Target") + theme(legend.position = "none") + ggtitle(paste("Selector: ",filtered_data_addr$Symbol, ", in source: ", filtered_data_addr$Source.Section))
+    p <- p + theme(text = element_text(size=15)) 
+    ss <- gsub("*/","_",ss)
+    ggsave(p, path=dir_name, filename=paste(addr,"_",ss,"_plot.png", sep=""), height = 300, width = 500, units="mm")
+  }
+  return (ss)
+}
+
+f_subdir <- function(row) {
+  ss <- row['Source.Section']
+  rec <- row['Receiver']
+  rank <- row['Rank']
+  o <- plot_calls_sub(ss)
+}
+
+# WIP - supposed to exclude primitive call, be not great
+apply(table_optimizable %>%
+  filter(Rank > 1 && Rank < 32), 1, f_subdir) 
+
+############################################## VARIBALES GENERATION ##############################################
+
+num_call_sites <- data_summary_num_targets %>% filter(Num.Targets == 1)
+num_poly <- data_summary_num_targets %>% filter(Num.Targets >= 2 && Num.Targets < 9)
+num_mega <- data_summary_num_targets %>% filter(Num.Targets >= 9)
+
+is.integer0 <- function(x)
+{
+  is.integer(x) && length(x) == 0L
+}
+
+num_poly <- if (is.integer0(num_poly$Cumulative)) {0} else{num_poly$Cumulative}
+num_mega <- if (is.integer0(num_mega$Cumulative)) {0} else{num_mega$Cumulative}
+
+############################################## TABLE SAVING ##############################################
+
+table_folder <- paste(now,"summary_tables",sep="/")
+dir.create(table_folder)
+print(xtable(distrib_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"call_target_distrib.tex", sep="/"))
+print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE, file = paste(table_folder,"hottest_megamorphic_call_sites.tex", sep="/"))
+print(xtable(distrib_split_per_ct, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"splits_per_target.tex", sep="/"))
+
+
+############################################## LATEX COMMAND GENERATION ##############################################
+
+@
+\def\CallTargetDistrib{%
+<<calltarget, echo=FALSE, results='asis'>>=
+print(xtable(distrib_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+  
+  \def\MoreThanOneSplit{%
+<<moreonsplit, echo=FALSE, results='asis'>>=
+print(xtable(distrib_2plus_split_per_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
+      @
+  }%
+  
+  \def\HottestMegamorphic{%
+<<hottestmega, echo=FALSE, results='asis'>>=
+print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE)
+    @
+  }%
+  
+  \def\SuperHottestMegamorphic{%
+<<superhottestmega, echo=FALSE, results='asis'>>=
+print(xtable(hottest_30mega_ct_table, type = "latex"), include.rownames=FALSE)
+    @
+  }%
+  
+  \def\MostExecutedCallSite{%
+<<mostexecuted, echo=FALSE, results='asis'>>=
+print(xtable(most_executed, type = "latex"), include.rownames=TRUE, tabular.environment="longtable",floating=FALSE)
+      @
+  }%
+  
+  \def\SplitDistrib{%
+<<splidistrib, echo=FALSE, results='asis'>>=
+print(xtable(distrib_split_per_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+      @
+  }%
+  
+    \def\SummaryPerLookupCache{%
+<<sumpercache, echo=FALSE, results='asis'>>=
+print(xtable(cachetab, type = "latex"), include.rownames=FALSE)
+      @
+  }%
+  
+    
+    \def\SummaryPerRubyCallSite{%
+<<sumpercall, echo=FALSE, results='asis'>>=
+print(xtable(calltab, type = "latex"), include.rownames=FALSE)
+      @
+  }%
+
+\newcommand{\BenchmarkName}{$\Sexpr{benchmark_name}$\xspace}
+\newcommand{\NumIterations}{$\Sexpr{number_iterations}$\xspace}
+\newcommand{\NumInnerIterations}{$\Sexpr{number_inner_iterations}$\xspace}
+\newcommand{\LogFilename}{\Sexpr{filename}\xspace}
+
+\newcommand{\NumberCallSites}{$\Sexpr{num_call_sites$Cumulative}$\xspace}
+\newcommand{\NumberCalls}{$\Sexpr{nrow(total)}$\xspace}
+\newcommand{\NumOfSplittedTargets}{$\Sexpr{nrow(split_call_site)}$\xspace}
+
+\newcommand{\NumberPolymorphic}{$\Sexpr{num_poly}$\xspace}
+\newcommand{\NumberMegamorphic}{$\Sexpr{num_mega}$\xspace}
+
+\newcommand{\Hihaho}{\Sexpr{hihaho}\xspace}
+\newcommand{\Yuria}{\Sexpr{yuria}\xspace}
+
+
+
+
+
+

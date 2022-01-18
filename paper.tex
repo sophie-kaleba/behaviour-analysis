@@ -1,0 +1,133 @@
+\documentclass[preprint]{acmart}
+
+%% Rights management information.  This information is sent to you
+%% when you complete the rights form.  These commands have SAMPLE
+%% values in them; it is your responsibility as an author to replace
+%% the commands and values with those provided to you when you
+%% complete the rights form.
+%\setcopyright{acmcopyright}
+%\copyrightyear{2020}
+%\acmYear{2020}
+%\acmDOI{10.1145/TODO}
+
+
+%\acmJournal{PACMPL}
+% \acmVolume{37}
+% \acmNumber{4}
+% \acmArticle{111}
+% \acmMonth{8}
+
+\newenvironment{knitrout}{}{} % an empty environment to be redefined in TeX
+\usepackage{tikz}
+\usepackage{xspace}
+\usepackage{lscape}
+\usepackage{framed}
+\usepackage{geometry}
+\usepackage{longtable}
+\usepackage{url}
+
+\geometry{legalpaper, margin=1in}
+\tikzstyle{every picture}+=[font=\sffamily]
+
+\newcommand{\refext}[1]{\detokenize{#1}}
+
+\input{gen-eval}
+
+
+\begin{document}
+
+\title{Ruby-on-rails applications - Analysis on call-site behaviour}
+
+\author{Sophie Kaleba}
+\email{s.kaleba@kent.ac.uk}
+
+\maketitle
+
+\section{Introduction}
+
+These are results are about the \BenchmarkName benchmark, that has been run for \NumIterations iterations, and \NumInnerIterations inner iterations, on a \Hihaho.
+The raw log file is located at $\LogFilename$. 
+
+\section{Global behaviour}
+
+In this experiment, \NumberCallSites call-sites were executed, totaling \NumberCalls calls.  
+The following table lists the thirty most executed call-sites within this execution\footnote{This does not account for the actual execution time spent}.
+
+\MostExecutedCallSite
+
+\section{Call-site behaviours}
+
+\subsection{Splitting}
+
+Within this execution, \NumOfSplittedTargets call-sites have been splitted.
+Some call-targets have been splitted several times; the following table list all the call targets that have been splitted.
+
+\MoreThanOneSplit
+
+\subsection{Type of lookup caches}
+
+Within the \NumberCallSites call-sites, \NumberPolymorphic were polymorphic (more than 1 targets), of which \NumberMegamorphic were megamorphic (more than 8 targets).
+The following table lists the detailed distribution of targets per call-site.
+
+\CallTargetDistrib
+
+The following table displays basic summary data based on the type of lookup cache.
+
+\SummaryPerLookupCache
+
+\subsection{Type of call-sites as per ruby semantics}
+
+There are XXXX different types of calls in Ruby:
+\begin{itemize}
+\item 
+\item 
+\item 
+\end{itemize}
+
+The following table displays basic summary data based on the type of ruby call-site.
+
+\SummaryPerRubyCallSite
+
+\section{Identifying patterns in execution}
+
+The call-sites qualifying for phase-based splitting have to fit within a set of criterion; namely, they have to:
+ \begin{itemize}
+ \item be polymorphic or megamorphic
+ \item be called a significant amount of times at runtime
+ \end{itemize}
+
+A manual inspection is then required to identify potential phases based on the lookup cache type. The following table lists the first forty-five most executed polymorphic call-sites.
+
+\begin{landscape}
+
+\SuperHottestMegamorphic{}
+
+\end{landscape}
+
+\appendix
+
+\section{Polymorphism}
+This table list the top 
+
+\begin{landscape}
+
+\HottestMegamorphic{}
+
+\end{landscape}
+
+\section{Splitting}
+
+This table lists all the splits that were performed
+
+\SplitDistrib{}
+
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{sample-base}
+
+
+\end{document}
+\endinput
+%%
+%% End of file `sample-acmsmall.tex'.
+
