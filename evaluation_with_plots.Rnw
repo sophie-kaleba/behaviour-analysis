@@ -81,10 +81,18 @@ most_executed$Receiver <- str_trunc(most_executed$Receiver, 25, "center") #trunc
 # Selection of most optimizable poly|megamorphic call sites (lots of calls)
 table_optimizable <- distrib_per_call_site %>%
   group_by(Source.Section) %>%
-  #filter(row_number()==1) %>% #former hack to deal with primitive calls
+  filter(row_number()==1) %>% #just keep the first of each source section
   tibble::rowid_to_column(var="Rank")
 table_optimizable_aux <- data.frame(table_optimizable)
 table_optimizable_aux$Source.Section <- str_trunc(table_optimizable_aux$Source.Section, 25, "center") #truncate the receiver label just so it fits on the table
+
+table_optimizable_builtin <- table_optimizable %>%
+    filter(Source.Section == "(core):1:1:0")
+table_optimizable_builtin <- data.frame(table_optimizable_builtin)
+
+table_optimizable_no_builtin <- table_optimizable %>%
+  filter(Source.Section != "(core):1:1:0")
+table_optimizable_no_builtin <- data.frame(table_optimizable_no_builtin)
 
 # number of split per call site
 split_call_site <- total %>%
@@ -169,8 +177,7 @@ dir.create(now)
 # if there are no polymorphic call-sites, no need to generate those graphs 
 # WIP - supposed to exclude primitive call, be not great
 if (nrow(filtered) != 0) {
-apply(table_optimizable %>%
-  filter(Rank > 1 && Rank < 32), 1, f) 
+apply(head(table_optimizable_no_builtin, 30), 1, f) 
 }
 
 # this folder is now hlding the latest ran analysis
@@ -201,8 +208,7 @@ f_subdir <- function(row) {
 }
 
 # WIP - supposed to exclude primitive call, be not great
-apply(table_optimizable %>%
-  filter(Rank > 1 && Rank < 32), 1, f_subdir) 
+apply(head(table_optimizable_no_builtin,30), 1, f_subdir) 
 
 ############################################## VARIBALES GENERATION ##############################################
 
@@ -212,11 +218,20 @@ num_mega <- data_summary_num_targets %>% filter(Num.Targets >= 9)
 
 is.integer0 <- function(x)
 {
-  is.integer(x) && length(x) == 0L
+  return (is.integer(x) && length(x) == 0L)
 }
 
-num_poly <- if (is.integer0(num_poly$Cumulative)) {0} else{num_poly$Cumulative}
-num_mega <- if (is.integer0(num_mega$Cumulative)) {0} else{num_mega$Cumulative}
+if (is.integer0(num_poly$Cumulative)) {
+   num_poly <- 0
+} else {
+  num_poly <- head(num_poly$Cumulative,1)
+}
+
+if (is.integer0(num_mega$Cumulative)) {
+  num_mega <- 0
+} else{
+  num_mega <- head(num_mega$Cumulative,1)
+}
 
 ############################################## TABLE SAVING ##############################################
 
@@ -224,7 +239,7 @@ table_folder <- paste(now,"summary_tables",sep="/")
 dir.create(table_folder)
 print(xtable(distrib_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"call_target_distrib.tex", sep="/"))
 print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE, file = paste(table_folder,"hottest_megamorphic_call_sites.tex", sep="/"))
-print(xtable(distrib_split_per_ct, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"splits_per_target.tex", sep="/"))
+print(xtable(distrib_split_per_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"splits_per_target.tex", sep="/"))
 
 
 ############################################## LATEX COMMAND GENERATION ##############################################
