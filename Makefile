@@ -4,9 +4,10 @@ SYSTEM_RUBY = "/home/sopi/.rbenv/versions/2.7.3/bin/ruby"
 JT="/home/sopi/Documents/Side_projects/truffleruby/tool/jt.rb"
 RAW_INPUT = raw_${benchmark_name}.log
 PARSED_INPUT = parsed_${benchmark_name}
+SPLIT_SUMMARY = split_$(PARSED_INPUT)
 
 run:
-	$(SYSTEM_RUBY) $(JT) --use jvm-ce ruby --vm.Dpolyglot.log.file="raw_${benchmark_name}.log"  /home/sopi/Documents/Side_projects/truffleruby/bench/phase/harness-behaviour.rb ${benchmark_name} ${iterations} ${inner_iterations} 
+	$(SYSTEM_RUBY) $(JT) --use jvm-ce ruby --vm.Dpolyglot.log.file="raw_${benchmark_name}.log" --splitting  /home/sopi/Documents/Side_projects/truffleruby/bench/phase/harness-behaviour.rb ${benchmark_name} ${iterations} ${inner_iterations} 
 
 parse:
 	python3 parse_morse_log.py $(RAW_INPUT) $(PARSED_INPUT).mylog 
@@ -16,6 +17,7 @@ knitr:
 	cp paper.tex $(PARSED_INPUT).tex
 
 reorganize:
+	mv $(SPLIT_SUMMARY).mylog latest/$(SPLIT_SUMMARY).mylog
 	mv $(PARSED_INPUT).tex latest/$(PARSED_INPUT).tex
 	mv $(RAW_INPUT) latest/$(RAW_INPUT)
 	mv $(PARSED_INPUT).mylog latest/$(PARSED_INPUT).mylog
