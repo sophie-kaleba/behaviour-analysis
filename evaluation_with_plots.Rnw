@@ -118,6 +118,7 @@ assert("Both tables should have the same number of call-sites", first(num_target
 assert("... And it should match the total number of call-sites", first(num_target_original$Cumulative) == Num.Call.Sites)
 
 #' Return a data frame that summarises polymoprhic behaviour in this run, takes splitting into account
+# Add: Num.Call.Sites (the number of call-sites associated with a given number of receivers), Cumulative
 #' @param num_receiver_column, whether we consider the observed or the original number of receivers  
 #' @param ct_address, whether we consider splitting 
 compute_num_target_splitting <- function(data, num_receiver_column) {
@@ -138,27 +139,34 @@ num_target_observed_w_splitting <- compute_num_target_splitting(total_w_splittin
 assert("Both tables should have the same number of call-sites", first(num_target_original_w_splitting$Cumulative) == first(num_target_observed_w_splitting$Cumulative))
 assert("... And it should match the total number of call-sites", first(num_target_original_w_splitting$Cumulative) == Num.Call.Sites.Incl.Splitted)
 
-
-total <- total %>%
+# Add the cache type for each call-site
+total_w_splitting <- total_w_splitting %>%
   group_by(Source.Section, Symbol, CT.Address) %>%
   dplyr::mutate(Cache.Type.Original = case_when(Num.Targets.Original == 1 ~ "MONO",
                                        Num.Targets.Original > 1 && Num.Targets.Original <= 8 ~ "POLY",
                                        Num.Targets.Original > 8 ~ "MEGA"))%>%
   dplyr::mutate(Cache.Type.Observed = case_when(Num.Targets.Observed == 1 ~ "MONO",
                                        Num.Targets.Observed > 1 && Num.Targets.Observed <= 8 ~ "POLY",
-                                       Num.Targets.Observed > 8 ~ "MEGA")) %>%
-  dplyr::mutate(Has.Changed.Status = (Cache.Type.Observed != Cache.Type.Original)) %>%
-  dplyr::mutate(Final.Status = any(str_detect(Has.Changed.Status, 'TRUE'))) %>%
-  dplyr::mutate(Final.TP = any(str_detect(Target.Polymorphism, 'TRUE')))
+                                       Num.Targets.Observed > 8 ~ "MEGA")) 
+
+
+
 
 ############################################## TARGET POLYMORPHISM ##############################################
 
-df <- data %>%
-  group_by(Source.Section, Symbol) %>%
-  dplyr::mutate(Num.Receiver.Observed = n_distinct(Observed.Receiver)) %>%
-  dplyr::mutate(Num.Receiver.Original = n_distinct(Original.Receiver)) %>%
-  verify(Num.Receiver.Original >= Num.Receiver.Observed) %>% # Assert invariant 3
-  ungroup()
+total_w_splitting <- total_w_splitting %>%
+  dplyr::mutate(Target.Polymorphism = (Observed.Receiver != Original.Receiver))
+
+total_w_splitting <- total_w_splitting %>%
+  group_by(Source.Section, Symbol, CT.Address) %>%
+  dplyr::mutate(Has.Changed.Status = (Cache.Type.Observed != Cache.Type.Original)) %>%
+  dplyr::mutate(Final.Status = any(str_detect(Has.Changed.Status, 'TRUE'))) %>%
+  dplyr::mutate(Final.TP = any(str_detect(Target.Polymorphism, 'TRUE'))) %>%
+  dplyr::mutate(Invalid.Status = case_when(Cache.Type.Original == "MONO" && Num.Targets.Observed == "POLY" ~ 'TRUE',
+                                           Cache.Type.Original == "MONO" && Num.Targets.Observed == "MEGA" ~ 'TRUE',
+                                           Cache.Type.Original == "POLY" && Num.Targets.Observed == "MEGA" ~ 'TRUE')) 
+
+assert("Changes of cache status are only allowed from high degree of polymoprhism to low degree of polymoprhism", nrow(total_w_splitting %>%  dplyr::filter(grepl('TRUE', Invalid.Status))) == 0)
 
 
 ########################################################################################################
