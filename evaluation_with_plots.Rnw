@@ -19,6 +19,7 @@ if (Sys.getenv("RSTUDIO") == "1") {
 #install.packages("reshape2", repos='http://cran.us.r-project.org')
 #install.packages("htmlTable", repos='http://cran.us.r-project.org')
 #install.packages("networkD3", repos='http://cran.us.r-project.org')
+#install.packages("testit", repos='http://cran.us.r-project.org')
 library(reshape2)
 library(ggplot2)
 library(data.table)
@@ -28,33 +29,94 @@ library(xtable)
 library(htmlTable)
 library(networkD3)
 library(R.utils)
+library(assertr)
+library(testit)
+
 
 source("./scripts/libraries.R", chdir=TRUE)
 source("./scripts/paper.R", chdir=TRUE)
 source("./scripts/phase-data-processing.R", chdir=TRUE)
 source("./scripts/machine_specs.R", chdir=TRUE)
 
-data <- read_splitting_profiling_file(filename)
-  
-############################################## STATISTICS ############################################## 
-  
+data <- read_splitting_profiling_file("./latest/parsed_BlogRailsRoutes.mylog")
+
+############################################## READ-ME ##############################################
+# INVARIANTS TO BE CHECKED
+# 1- A call-site is identified by a unique pair: {Source.Section, Symbol}
+# 2- A target is identified by a unique triple: {Source.Section, Symbol, Receiver}
+# 3- For one call-site, the number of original receivers is necessarily greater or equal to the number of observed receivers
+# 4- There is at least one target per call-site (so the number of targets >= number of call-sites)
+
+# COLUMN DESCRIPTION
+# Source.Section - the lexical location of the call. This is somewhat not 100% reliable, so we pair it with:
+# Symbol - the name of the symbol at this location, to turn it into a unique identifier for the location
+# CT.Address - the hashcode of the target executed at this call-site. Needed to spot whether splitting happened
+# Original.Receiver - class of the receiver of this call, before lookup (could later resolve higher in its class hierarchy)
+# Observed.Receiver - class of the receiver of this call, after lookup 
+
+# VARIABLE DESCRIPTION
+# Num.Call.Sites - The number of call-sites executed in this run (as in number of distinct pair of Source.Section, Symbol)
+# Num.Targets.Original - The total number of different call-targets in this run (before lookup)
+# Num.Targets.Observed - The total number of different call-targets in this run (after lookup)
+
+############################################## MAIN TABLE ############################################## 
+
+# remove any invalid data (extra logging info ignored by parsing)
+# TODO - improve parser
 data <- data %>% 
     dplyr::filter(!(Source.Section=="")) %>% 
     tibble::rowid_to_column(var="Call.ID")
 
-# summarized table to have a idea of the polymorphic call sites
+# Add info on the number of call targets per call-site (taking splittng into account)
+# Add: Num.Receiver.Observed, Num.Receiver.Original
 total <- data %>%
-  group_by(Source.Section, CT.Address) %>%
-  dplyr::mutate(Num.Targets = n_distinct(Receiver))
+  group_by(Source.Section, Symbol, CT.Address) %>%
+  dplyr::mutate(Num.Receiver.Observed = n_distinct(Observed.Receiver)) %>%
+  dplyr::mutate(Num.Receiver.Original = n_distinct(Original.Receiver)) %>%
+  verify(Num.Receiver.Original >= Num.Receiver.Observed) %>% # Assert invariant 3
+  ungroup()
 
-# to filter out by the number of targets and only keep polymoprhic call-sites
-filtered <- total %>%
-  filter(Num.Targets >= 2)
+############################################## VARIABLES ############################################## 
+# Mainly used for latex macro and checking invariants
+
+Num.Call.Sites <- n_distinct(total$Source.Section, total$Symbol) 
+Num.Targets.Original <- n_distinct(total$Source.Section, total$Symbol, total$Num.Receiver.Original) 
+Num.Targets.Observed <- n_distinct(total$Source.Section, total$Symbol, total$Num.Receiver.Observed) 
+assert("There should not be more call-sites than call targets", Num.Targets.Original >= Num.Call.Sites) # assert invariant 4
+
+############################################## POLYMORPHISM ##############################################
+
+#' Return a data frame that summarises polymoprhic behaviour in this run
+#' @param num_receiver_column, whether we consider the observed or the original number of receivers  
+#' @param ct_address, whether we consider splitting 
+compute_num_target <- function(num_receiver_column) {
+  df <- total %>%
+  select(Source.Section, Symbol,!! sym(num_receiver_column)) %>% # the sym trick is necessary so that dplyr processes the parameter
+  group_by(!! sym(num_receiver_column)) %>%
+  dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol)) %>%
+  select(!! sym(num_receiver_column), Num.Call.Sites) %>%
+  filter(row_number()==1) %>% #just keep the first of each source section
+  dplyr::arrange(!! sym(num_receiver_column)) %>%
+  mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites))))
+  return(df)
+}
+
+num_target_original <- compute_num_target("Num.Receiver.Original")
+num_target_observed <- compute_num_target("Num.Receiver.Observed")
+
+########################################################################################################
+############################################## MANUAL INSPECTION ############################################## 
+########################################################################################################
+
+# to filter out by the number of targets and only keep polymoprhic call-sites (useful for later manual inspection)
+polymorphic_call_sites <- total %>%
+  filter(Num.Targets.Observed >= 2) %>%
+  filter(Num.Targets.Original >= 2)
 
 # distribution for each call site, pick the most represented receiver by call-site
 # TODO - I think this is overly too complex
-distrib_per_call_site <- filtered %>%
-  group_by(Source.Section, CT.Address, Receiver) %>%
+distrib_per_call_site <- polymorphic_call_sites %>%
+  group_by(Source.Section, Symbol, CT.Address, Receiver) %>%
   dplyr::summarise(n_calls = n()) %>%
   dplyr::mutate(Weight.Frequent.Receiver = round(n_calls/sum(n_calls),3)*100) %>%
   dplyr::arrange(desc(n_calls)) %>%
@@ -62,21 +124,6 @@ distrib_per_call_site <- filtered %>%
   dplyr::mutate(Num.Calls.Per.SS = sum(n_calls)) %>%
   dplyr::mutate(Times.splitted = n_distinct(CT.Address)) %>%
   dplyr::arrange(desc(Num.Calls.Per.SS),  CT.Address, Source.Section, desc(n_calls)) 
-
-# to get data on the distribution of polymoprhism
-data_summary_num_targets <- total %>%
-  group_by(Num.Targets, Source.Section) %>%
-  dplyr::summarise("Num.Call.Sites"=n_distinct(Num.Targets))  %>%
-  dplyr::select(Num.Targets, Num.Call.Sites) %>%
-  dplyr::count(Num.Targets, name="Num.Call.Sites") %>%
-  mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites))))
-
-# to get an idea of the most executed call-sites
-most_executed <- total %>%
-  group_by(Source.Section, Receiver, Symbol) %>%
-  dplyr::summarise(Num.Calls = n()) %>%
-  dplyr::arrange(desc(Num.Calls))
-most_executed$Receiver <- str_trunc(most_executed$Receiver, 25, "center") #truncate the receiver label just so it fits on the table
 
 # Selection of most optimizable poly|megamorphic call sites (lots of calls)
 table_optimizable <- distrib_per_call_site %>%
@@ -93,20 +140,69 @@ table_optimizable_builtin <- data.frame(table_optimizable_builtin)
 table_optimizable_no_builtin <- table_optimizable %>%
   filter(Source.Section != "(core):1:1:0")
 table_optimizable_no_builtin <- data.frame(table_optimizable_no_builtin)
+# data <- data %>%
+#   group_by(Source.Section) %>%
+#   dplyr::filter(!(Source.Section=="")) %>% 
+#   dplyr::mutate(Num.Symbols = n_distinct(Symbol)) %>%
+#   dplyr::mutate(Different.Symbol = case_when(Num.Symbols >1 ~ TRUE,
+#                                              Num.Symbols == 1 ~FALSE)) %>%
+#   dplyr::filter(Different.Symbol == TRUE) %>%
+#   group_by(Source.Section)
+
+
+
+
+
+
+
+
+# to get an idea of the most executed call-sites
+most_executed <- total %>%
+  group_by(Source.Section, Receiver, Symbol) %>%
+  dplyr::summarise(Num.Calls = n()) %>%
+  dplyr::arrange(desc(Num.Calls))
+most_executed$Receiver <- str_trunc(most_executed$Receiver, 25, "center") #truncate the receiver label just so it fits on the table
 
 # number of split per call site
 split_call_site <- total %>%
   group_by(Source.Section) %>%
   dplyr::summarise(Times.splitted = n_distinct(CT.Address)) %>%
+  #dplyr::select(Source.Section, Receiver, Symbol, Times.splitted) %>%
   dplyr::arrange(desc(Times.splitted))
 split_call_site$Source.Section <- str_trunc(split_call_site$Source.Section, 25, "center")
 
 split_call_site_more <- split_call_site %>%
     filter(Times.splitted > 1)
 
+############################################## TARGET POLYMORPHISM ############################################## 
+
+# how many call-sites are experiencing target polymoprhism?
+total <- total %>%
+  dplyr::mutate(Target.Polymorphism = (Observed.Receiver != Original.Receiver))
+
+target_poly <- total %>%
+  group_by(Source.Section, Symbol, CT.Address) %>%
+  dplyr::mutate(Cache.Type.Original = case_when(Num.Targets.Original == 1 ~ "MONO",
+                                       Num.Targets.Original > 1 && Num.Targets.Original <= 8 ~ "POLY",
+                                       Num.Targets.Original > 8 ~ "MEGA"))%>%
+  dplyr::mutate(Cache.Type.Observed = case_when(Num.Targets.Observed == 1 ~ "MONO",
+                                       Num.Targets.Observed > 1 && Num.Targets.Observed <= 8 ~ "POLY",
+                                       Num.Targets.Observed > 8 ~ "MEGA")) %>%
+  dplyr::mutate(Has.Changed.Status = (Cache.Type.Observed != Cache.Type.Original)) %>%
+  dplyr::mutate(Final.Status = any(str_detect(Has.Changed.Status, 'TRUE'))) %>%
+  dplyr::mutate(Final.TP = any(str_detect(Target.Polymorphism, 'TRUE')))
+
+details <- target_poly %>% group_by(Source.Section, Symbol, CT.Address) %>%  filter(Final.Status == TRUE) %>%  filter(Final.TP == TRUE)
+
+# How many source sections (call-sites) are changing LC status due to TP?
+Num.Call.Sites <- target_poly %>% group_by(Source.Section, Symbol, CT.Address) %>% length(.)
+Has.Experienced.TP <- nrow(target_poly %>% group_by(Source.Section, Symbol, CT.Address) %>% slice(1) %>% filter(Final.TP == TRUE)) 
+Has.Changed.Status <- nrow(target_poly %>% group_by(Source.Section, Symbol, CT.Address) %>% slice(1) %>% filter(Final.Status == TRUE)) 
+
+
 ############################################## TABLE GENERATION ############################################## 
 
-distrib_ct_table <- xtable(data_summary_num_targets, caption = "Distribution of call-targets")
+distrib_ct_table <- xtable(data_summary_num_targets_original, caption = "Distribution of call-targets")
 distrib_ct_table <- autoformat(distrib_ct_table, zap = getOption("digits"))
 
 hottest_mega_ct_table <- xtable(table_optimizable_aux, caption = "Hottest megamorphic call sites")
@@ -127,16 +223,9 @@ most_executed <- autoformat(most_executed, zap = getOption("digits"))
 
 ############################################## SUMMARY TABLE GENERATION ACCORDING TO CACHE TYPE ############################################## 
 
-total_per_cache_type <- total %>%
-  group_by(Source.Section) %>%
-  dplyr::mutate(Num.Targets = n_distinct(Receiver)) %>%
-  dplyr::mutate(Cache.Type = case_when(Num.Targets == 1 ~ "MONO",
-                                       Num.Targets > 1 && Num.Targets <= 8 ~ "POLY",
-                                       Num.Targets > 8 ~ "MEGA"))
-
-total_per_cache_type <- total_per_cache_type %>%
-  group_by(Cache.Type) %>%
-  dplyr::summarise(Num.Calls = n(), Num.Call.Sites = n_distinct(Source.Section), Times.splitted = n_distinct(CT.Address))
+total_per_cache_type <- target_poly %>%
+  group_by(Cache.Type.Original) %>%
+  dplyr::summarise(Num.Calls = n(), Num.Call.Sites = n_distinct(Source.Section, Symbol), Times.splitted = n_distinct(CT.Address))
 
 cachetab <- xtable(total_per_cache_type, caption = "Summary per cache type")
 cachetab <- autoformat(cachetab, zap = getOption("digits"))
@@ -308,6 +397,10 @@ print(xtable(calltab, type = "latex"), include.rownames=FALSE)
 
 \newcommand{\Hihaho}{\Sexpr{hihaho}\xspace}
 \newcommand{\Yuria}{\Sexpr{yuria}\xspace}
+
+
+\newcommand{\HasChangedStatus}{$\Sexpr{Has.Changed.Status}$\xspace}
+\newcommand{\HasExperiencedTP}{$\Sexpr{Has.Experienced.TP}$\xspace}
 
 
 
