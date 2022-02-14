@@ -69,30 +69,38 @@ data <- data %>%
 
 # Add info on the number of call targets per call-site (taking splittng into account)
 # Add: Num.Receiver.Observed, Num.Receiver.Original
-total <- data %>%
+total_w_splitting <- data %>%
   group_by(Source.Section, Symbol, CT.Address) %>%
   dplyr::mutate(Num.Receiver.Observed = n_distinct(Observed.Receiver)) %>%
   dplyr::mutate(Num.Receiver.Original = n_distinct(Original.Receiver)) %>%
   verify(Num.Receiver.Original >= Num.Receiver.Observed) %>% # Assert invariant 3
-  ungroup()
+  ungroup() 
+
+total_wo_splitting <- data %>%
+  group_by(Source.Section, Symbol) %>%
+  dplyr::mutate(Num.Receiver.Observed = n_distinct(Observed.Receiver)) %>%
+  dplyr::mutate(Num.Receiver.Original = n_distinct(Original.Receiver)) %>%
+  # Invariant 3 cannot be verified in this case
+  ungroup() 
 
 ############################################## VARIABLES ############################################## 
 # Mainly used for latex macro and checking invariants
 
-Num.Call.Sites <- n_distinct(total$Source.Section, total$Symbol) 
-Num.Call.Sites.Incl.Splitted <- n_distinct(total$Source.Section, total$Symbol, total$CT.Address) 
-Num.Targets.Original <- n_distinct(total$Source.Section, total$Symbol, total$Num.Receiver.Original) 
-Num.Targets.Observed <- n_distinct(total$Source.Section, total$Symbol, total$Num.Receiver.Observed) 
+Num.Call.Sites <- n_distinct(data$Source.Section, data$Symbol) 
+Num.Call.Sites.Incl.Splitted <- n_distinct(data$Source.Section, data$Symbol, data$CT.Address) 
+Num.Targets.Original <- n_distinct(total_w_splitting$Source.Section, total_w_splitting$Symbol, total_w_splitting$Num.Receiver.Original) 
+Num.Targets.Observed <- n_distinct(total_w_splitting$Source.Section, total_w_splitting$Symbol, total_w_splitting$Num.Receiver.Observed) 
 assert("There should not be more call-sites than call targets", Num.Targets.Original >= Num.Call.Sites) # assert invariant 4
 assert("There should not be more call-sites than splitted call sites", Num.Call.Sites.Incl.Splitted >= Num.Call.Sites) 
 
 ############################################## POLYMORPHISM ##############################################
 
 #' Return a data frame that summarises polymoprhic behaviour in this run
+# Add: Num.Call.Sites (the number of call-sites associated with a given number of receivers), Cumulative
 #' @param num_receiver_column, whether we consider the observed or the original number of receivers  
 #' @param ct_address, whether we consider splitting 
-compute_num_target <- function(num_receiver_column) {
-  df <- total %>%
+compute_num_target <- function(data, num_receiver_column) {
+  df <- data %>%
     select(Source.Section, Symbol, !! sym(num_receiver_column)) %>% 
     group_by(Source.Section, Symbol) %>%
     filter(row_number()==1) %>% # at this point, we have a line per call-site
@@ -104,16 +112,16 @@ compute_num_target <- function(num_receiver_column) {
   return(df)
 }
 
-num_target_original <- compute_num_target("Num.Receiver.Original")
-num_target_observed <- compute_num_target("Num.Receiver.Observed")
+num_target_original <- compute_num_target(total_wo_splitting, "Num.Receiver.Original")
+num_target_observed <- compute_num_target(total_wo_splitting, "Num.Receiver.Observed")
 assert("Both tables should have the same number of call-sites", first(num_target_original$Cumulative) == first(num_target_observed$Cumulative))
 assert("... And it should match the total number of call-sites", first(num_target_original$Cumulative) == Num.Call.Sites)
 
 #' Return a data frame that summarises polymoprhic behaviour in this run, takes splitting into account
 #' @param num_receiver_column, whether we consider the observed or the original number of receivers  
 #' @param ct_address, whether we consider splitting 
-compute_num_target_splitting <- function(num_receiver_column) {
-  df <- total %>%
+compute_num_target_splitting <- function(data, num_receiver_column) {
+  df <- data %>%
     select(Source.Section, Symbol, CT.Address, !! sym(num_receiver_column)) %>% 
     group_by(Source.Section, Symbol, CT.Address) %>%
     filter(row_number()==1) %>% # at this point, we have a line per call-site
@@ -125,8 +133,33 @@ compute_num_target_splitting <- function(num_receiver_column) {
   return(df)
 }
 
-num_target_observed_inc_splitting <- compute_num_target_splitting("Num.Receiver.Observed")
-assert("... And it should match the total number of call-sites", first(num_target_observed_inc_splitting$Cumulative) == Num.Call.Sites.Incl.Splitted)
+num_target_original_w_splitting <- compute_num_target_splitting(total_w_splitting, "Num.Receiver.Original")
+num_target_observed_w_splitting <- compute_num_target_splitting(total_w_splitting, "Num.Receiver.Observed")
+assert("Both tables should have the same number of call-sites", first(num_target_original_w_splitting$Cumulative) == first(num_target_observed_w_splitting$Cumulative))
+assert("... And it should match the total number of call-sites", first(num_target_original_w_splitting$Cumulative) == Num.Call.Sites.Incl.Splitted)
+
+
+total <- total %>%
+  group_by(Source.Section, Symbol, CT.Address) %>%
+  dplyr::mutate(Cache.Type.Original = case_when(Num.Targets.Original == 1 ~ "MONO",
+                                       Num.Targets.Original > 1 && Num.Targets.Original <= 8 ~ "POLY",
+                                       Num.Targets.Original > 8 ~ "MEGA"))%>%
+  dplyr::mutate(Cache.Type.Observed = case_when(Num.Targets.Observed == 1 ~ "MONO",
+                                       Num.Targets.Observed > 1 && Num.Targets.Observed <= 8 ~ "POLY",
+                                       Num.Targets.Observed > 8 ~ "MEGA")) %>%
+  dplyr::mutate(Has.Changed.Status = (Cache.Type.Observed != Cache.Type.Original)) %>%
+  dplyr::mutate(Final.Status = any(str_detect(Has.Changed.Status, 'TRUE'))) %>%
+  dplyr::mutate(Final.TP = any(str_detect(Target.Polymorphism, 'TRUE')))
+
+############################################## TARGET POLYMORPHISM ##############################################
+
+df <- data %>%
+  group_by(Source.Section, Symbol) %>%
+  dplyr::mutate(Num.Receiver.Observed = n_distinct(Observed.Receiver)) %>%
+  dplyr::mutate(Num.Receiver.Original = n_distinct(Original.Receiver)) %>%
+  verify(Num.Receiver.Original >= Num.Receiver.Observed) %>% # Assert invariant 3
+  ungroup()
+
 
 ########################################################################################################
 ############################################## MANUAL INSPECTION ############################################## 
