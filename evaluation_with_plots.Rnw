@@ -80,9 +80,11 @@ total <- data %>%
 # Mainly used for latex macro and checking invariants
 
 Num.Call.Sites <- n_distinct(total$Source.Section, total$Symbol) 
+Num.Call.Sites.Incl.Splitted <- n_distinct(total$Source.Section, total$Symbol, total$CT.Address) 
 Num.Targets.Original <- n_distinct(total$Source.Section, total$Symbol, total$Num.Receiver.Original) 
 Num.Targets.Observed <- n_distinct(total$Source.Section, total$Symbol, total$Num.Receiver.Observed) 
 assert("There should not be more call-sites than call targets", Num.Targets.Original >= Num.Call.Sites) # assert invariant 4
+assert("There should not be more call-sites than splitted call sites", Num.Call.Sites.Incl.Splitted >= Num.Call.Sites) 
 
 ############################################## POLYMORPHISM ##############################################
 
@@ -91,18 +93,40 @@ assert("There should not be more call-sites than call targets", Num.Targets.Orig
 #' @param ct_address, whether we consider splitting 
 compute_num_target <- function(num_receiver_column) {
   df <- total %>%
-  select(Source.Section, Symbol,!! sym(num_receiver_column)) %>% # the sym trick is necessary so that dplyr processes the parameter
-  group_by(!! sym(num_receiver_column)) %>%
-  dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol)) %>%
-  select(!! sym(num_receiver_column), Num.Call.Sites) %>%
-  filter(row_number()==1) %>% #just keep the first of each source section
-  dplyr::arrange(!! sym(num_receiver_column)) %>%
-  mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites))))
+    select(Source.Section, Symbol, !! sym(num_receiver_column)) %>% 
+    group_by(Source.Section, Symbol) %>%
+    filter(row_number()==1) %>% # at this point, we have a line per call-site
+    group_by(!! sym(num_receiver_column)) %>%
+    dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol)) %>%
+    select(!! sym(num_receiver_column), Num.Call.Sites) %>%
+    filter(row_number()==1) %>% #just keep the first of each source section
+    mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites))))
   return(df)
 }
 
 num_target_original <- compute_num_target("Num.Receiver.Original")
 num_target_observed <- compute_num_target("Num.Receiver.Observed")
+assert("Both tables should have the same number of call-sites", first(num_target_original$Cumulative) == first(num_target_observed$Cumulative))
+assert("... And it should match the total number of call-sites", first(num_target_original$Cumulative) == Num.Call.Sites)
+
+#' Return a data frame that summarises polymoprhic behaviour in this run, takes splitting into account
+#' @param num_receiver_column, whether we consider the observed or the original number of receivers  
+#' @param ct_address, whether we consider splitting 
+compute_num_target_splitting <- function(num_receiver_column) {
+  df <- total %>%
+    select(Source.Section, Symbol, CT.Address, !! sym(num_receiver_column)) %>% 
+    group_by(Source.Section, Symbol, CT.Address) %>%
+    filter(row_number()==1) %>% # at this point, we have a line per call-site
+    group_by(!! sym(num_receiver_column)) %>%
+    dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol, CT.Address)) %>%
+    select(!! sym(num_receiver_column), Num.Call.Sites) %>%
+    filter(row_number()==1) %>% #just keep the first of each source section
+    mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites))))
+  return(df)
+}
+
+num_target_observed_inc_splitting <- compute_num_target_splitting("Num.Receiver.Observed")
+assert("... And it should match the total number of call-sites", first(num_target_observed_inc_splitting$Cumulative) == Num.Call.Sites.Incl.Splitted)
 
 ########################################################################################################
 ############################################## MANUAL INSPECTION ############################################## 
