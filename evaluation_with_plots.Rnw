@@ -103,11 +103,11 @@ compute_num_target <- function(data, num_receiver_column) {
   df <- data %>%
     select(Source.Section, Symbol, !! sym(num_receiver_column)) %>% 
     group_by(Source.Section, Symbol) %>%
-    filter(row_number()==1) %>% # at this point, we have a line per call-site
+    slice(1) %>% # at this point, we have a line per call-site
     group_by(!! sym(num_receiver_column)) %>%
     dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol)) %>%
     select(!! sym(num_receiver_column), Num.Call.Sites) %>%
-    filter(row_number()==1) %>% #just keep the first of each source section
+    slice(1) %>% #just keep the first of each source section
     mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites))))
   return(df)
 }
@@ -125,11 +125,11 @@ compute_num_target_splitting <- function(data, num_receiver_column) {
   df <- data %>%
     select(Source.Section, Symbol, CT.Address, !! sym(num_receiver_column)) %>% 
     group_by(Source.Section, Symbol, CT.Address) %>%
-    filter(row_number()==1) %>% # at this point, we have a line per call-site
+    slice(1) %>% # at this point, we have a line per call-site
     group_by(!! sym(num_receiver_column)) %>%
     dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol, CT.Address)) %>%
     select(!! sym(num_receiver_column), Num.Call.Sites) %>%
-    filter(row_number()==1) %>% #just keep the first of each source section
+    slice(1) %>% #just keep the first of each source section
     mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites))))
   return(df)
 }
@@ -141,33 +141,78 @@ assert("... And it should match the total number of call-sites", first(num_targe
 
 # Add the cache type for each call-site
 total_w_splitting <- total_w_splitting %>%
+  ungroup() %>%
   group_by(Source.Section, Symbol, CT.Address) %>%
-  dplyr::mutate(Cache.Type.Original = case_when(Num.Targets.Original == 1 ~ "MONO",
-                                       Num.Targets.Original > 1 && Num.Targets.Original <= 8 ~ "POLY",
-                                       Num.Targets.Original > 8 ~ "MEGA"))%>%
-  dplyr::mutate(Cache.Type.Observed = case_when(Num.Targets.Observed == 1 ~ "MONO",
-                                       Num.Targets.Observed > 1 && Num.Targets.Observed <= 8 ~ "POLY",
-                                       Num.Targets.Observed > 8 ~ "MEGA")) 
+  dplyr::mutate(Cache.Type.Original = case_when(Num.Receiver.Original == 1 ~ "MONO",
+                                       Num.Receiver.Original > 1 && Num.Receiver.Original <= 8 ~ "POLY",
+                                       Num.Receiver.Original > 8 ~ "MEGA"))%>%
+  dplyr::mutate(Cache.Type.Observed = case_when(Num.Receiver.Observed == 1 ~ "MONO",
+                                       Num.Receiver.Observed > 1 && Num.Receiver.Observed <= 8 ~ "POLY",
+                                       Num.Receiver.Observed > 8 ~ "MEGA")) 
 
 
-
+toto <- total_w_splitting %>%
+  filter(Symbol == "nanoseconds_to_unit")
 
 ############################################## TARGET POLYMORPHISM ##############################################
 
+# Add: Target.Polymorphism
 total_w_splitting <- total_w_splitting %>%
   dplyr::mutate(Target.Polymorphism = (Observed.Receiver != Original.Receiver))
 
+# Add: Has.Changed.Status, Has.Changed.Status.aggr (the aggregated version, ie the final status of this call-site)
 total_w_splitting <- total_w_splitting %>%
   group_by(Source.Section, Symbol, CT.Address) %>%
   dplyr::mutate(Has.Changed.Status = (Cache.Type.Observed != Cache.Type.Original)) %>%
-  dplyr::mutate(Final.Status = any(str_detect(Has.Changed.Status, 'TRUE'))) %>%
-  dplyr::mutate(Final.TP = any(str_detect(Target.Polymorphism, 'TRUE'))) %>%
+  dplyr::mutate(Has.Changed.Status.aggr = any(str_detect(Has.Changed.Status, 'TRUE'))) %>%
+  dplyr::mutate(Target.Polymorphism.aggr = any(str_detect(Target.Polymorphism, 'TRUE'))) %>%
   dplyr::mutate(Invalid.Status = case_when(Cache.Type.Original == "MONO" && Num.Targets.Observed == "POLY" ~ 'TRUE',
                                            Cache.Type.Original == "MONO" && Num.Targets.Observed == "MEGA" ~ 'TRUE',
                                            Cache.Type.Original == "POLY" && Num.Targets.Observed == "MEGA" ~ 'TRUE')) 
 
 assert("Changes of cache status are only allowed from high degree of polymoprhism to low degree of polymoprhism", nrow(total_w_splitting %>%  dplyr::filter(grepl('TRUE', Invalid.Status))) == 0)
+total_w_splitting <- dplyr::select(total_w_splitting, -Invalid.Status) #We can safely drop this column then
 
+# How many source sections (call-sites) are changing LC status due to TP?
+Has.Experienced.TP <- nrow(total_w_splitting %>% group_by(Source.Section, Symbol, CT.Address) %>% slice(1) %>% filter(Target.Polymorphism.aggr == TRUE)) 
+Has.Changed.Status <- nrow(total_w_splitting %>% group_by(Source.Section, Symbol, CT.Address) %>% slice(1) %>% filter(Has.Changed.Status.aggr == TRUE)) 
+assert("Only call-sites having experienced target polymorphism can experience a change in the status of their cache", Has.Experienced.TP >= Has.Changed.Status)
+
+# give an overview of the evolution of caches after resolving target polymorphism
+summary_cache_change <- total_w_splitting %>%
+      dplyr::select(-Has.Changed.Status, -Target.Polymorphism) %>%
+      group_by(Source.Section, Symbol, CT.Address) %>% 
+      slice(1) %>% 
+      filter(Has.Changed.Status.aggr == TRUE)  %>%
+      group_by(Cache.Type.Original, Cache.Type.Observed) %>%
+      dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol, CT.Address)) %>%
+      select(Cache.Type.Original, Cache.Type.Observed, Num.Call.Sites) %>%
+      slice(1) 
+
+# give an overview of the evolution of caches after resolving target polymorphism
+# at the granularity of cache size
+summary_cache_change_detail <- total_w_splitting %>%
+      dplyr::select(-Has.Changed.Status, -Target.Polymorphism) %>%
+      group_by(Source.Section, Symbol, CT.Address) %>% 
+      filter(Has.Changed.Status.aggr == TRUE)  %>%
+      group_by(Num.Receiver.Original, Num.Receiver.Observed) %>%
+      dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol, CT.Address)) %>%
+      select(Num.Receiver.Original, Num.Receiver.Observed, Num.Call.Sites) %>%
+      slice(1) %>%
+      mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites)))) %>%
+      verify(first(Cumulative) == Has.Changed.Status) # the cumulative amount of TP call-site should be equal to Has.Changed.Status
+
+# give an overview of the evolution of caches after resolving target polymorphism
+# at the granularity of cache size
+# and provide details about the concerned call-sites
+summary_cache_change_detail_turbo <- total_w_splitting %>%
+      dplyr::select(-Has.Changed.Status, -Target.Polymorphism) %>%
+      group_by(Source.Section, Symbol, CT.Address) %>% 
+      filter(Has.Changed.Status.aggr == TRUE)  %>%
+      select(Num.Receiver.Original, Num.Receiver.Observed, Symbol, Source.Section, CT.Address, Original.Receiver, Observed.Receiver) %>%
+      dplyr::arrange(Num.Receiver.Original, Num.Receiver.Observed)
+      
+      
 
 ########################################################################################################
 ############################################## MANUAL INSPECTION ############################################## 
@@ -238,32 +283,6 @@ split_call_site$Source.Section <- str_trunc(split_call_site$Source.Section, 25, 
 
 split_call_site_more <- split_call_site %>%
     filter(Times.splitted > 1)
-
-############################################## TARGET POLYMORPHISM ############################################## 
-
-# how many call-sites are experiencing target polymoprhism?
-total <- total %>%
-  dplyr::mutate(Target.Polymorphism = (Observed.Receiver != Original.Receiver))
-
-target_poly <- total %>%
-  group_by(Source.Section, Symbol, CT.Address) %>%
-  dplyr::mutate(Cache.Type.Original = case_when(Num.Targets.Original == 1 ~ "MONO",
-                                       Num.Targets.Original > 1 && Num.Targets.Original <= 8 ~ "POLY",
-                                       Num.Targets.Original > 8 ~ "MEGA"))%>%
-  dplyr::mutate(Cache.Type.Observed = case_when(Num.Targets.Observed == 1 ~ "MONO",
-                                       Num.Targets.Observed > 1 && Num.Targets.Observed <= 8 ~ "POLY",
-                                       Num.Targets.Observed > 8 ~ "MEGA")) %>%
-  dplyr::mutate(Has.Changed.Status = (Cache.Type.Observed != Cache.Type.Original)) %>%
-  dplyr::mutate(Final.Status = any(str_detect(Has.Changed.Status, 'TRUE'))) %>%
-  dplyr::mutate(Final.TP = any(str_detect(Target.Polymorphism, 'TRUE')))
-
-details <- target_poly %>% group_by(Source.Section, Symbol, CT.Address) %>%  filter(Final.Status == TRUE) %>%  filter(Final.TP == TRUE)
-
-# How many source sections (call-sites) are changing LC status due to TP?
-Num.Call.Sites <- target_poly %>% group_by(Source.Section, Symbol, CT.Address) %>% length(.)
-Has.Experienced.TP <- nrow(target_poly %>% group_by(Source.Section, Symbol, CT.Address) %>% slice(1) %>% filter(Final.TP == TRUE)) 
-Has.Changed.Status <- nrow(target_poly %>% group_by(Source.Section, Symbol, CT.Address) %>% slice(1) %>% filter(Final.Status == TRUE)) 
-
 
 ############################################## TABLE GENERATION ############################################## 
 
