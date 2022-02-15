@@ -151,9 +151,6 @@ total_w_splitting <- total_w_splitting %>%
                                        Num.Receiver.Observed > 8 ~ "MEGA")) 
 
 
-toto <- total_w_splitting %>%
-  filter(Symbol == "nanoseconds_to_unit")
-
 ############################################## TARGET POLYMORPHISM ##############################################
 
 # Add: Target.Polymorphism
@@ -212,29 +209,48 @@ summary_cache_change_detail_turbo <- total_w_splitting %>%
       select(Num.Receiver.Original, Num.Receiver.Observed, Symbol, Source.Section, CT.Address, Original.Receiver, Observed.Receiver) %>%
       dplyr::arrange(Num.Receiver.Original, Num.Receiver.Observed)
       
-      
+############################################## SPLITTING ##############################################    
 
-########################################################################################################
+# Provide a list of splitted-call sites
+# Add: Times.Splitted, the number of times a call-site has been splitted
+generate_splitting_summary <- function(data, ...) {
+  df <- data %>%
+    select(...) %>%
+    group_by(Source.Section, Symbol) %>%
+    dplyr::mutate(Times.splitted = n_distinct(CT.Address) - 1) %>%  # -1 otherwise we count the call-sites that have one call target (ie not splitted)
+    dplyr::filter(Times.splitted > 0)
+  return(df)
+}
+
+summary_splitting <- generate_splitting_summary(total_w_splitting, c("Source.Section", "Symbol", "CT.Address")) %>%
+  select(-CT.Address) %>%
+  slice(1) %>%
+  dplyr::arrange(desc(Times.splitted)) 
+
+col <- c("Source.Section", "Symbol", "CT.Address", "Original.Receiver", "Observed.Receiver", "Num.Receiver.Observed", "Num.Receiver.Original")
+summary_splitting_detail_turbo <- generate_splitting_summary(total_w_splitting, col) %>%
+  group_by(Source.Section, Symbol, CT.Address) %>%
+  slice(1) %>%
+  dplyr::arrange(desc(Times.splitted)) 
+
 ############################################## MANUAL INSPECTION ############################################## 
-########################################################################################################
 
-# to filter out by the number of targets and only keep polymoprhic call-sites (useful for later manual inspection)
-polymorphic_call_sites <- total %>%
-  filter(Num.Targets.Observed >= 2) %>%
-  filter(Num.Targets.Original >= 2)
+# to filter out by the number of targets and only keep polymoprhic call-sites 
+polymorphic_call_sites <- total_w_splitting %>%
+  filter(Num.Receiver.Original >= 2) %>%
+  filter(Num.Receiver.Observed >= 2)
 
 # distribution for each call site, pick the most represented receiver by call-site
-# TODO - I think this is overly too complex
 distrib_per_call_site <- polymorphic_call_sites %>%
-  group_by(Source.Section, Symbol, CT.Address, Receiver) %>%
+  group_by(Source.Section, Symbol, CT.Address, Observed.Receiver) %>%
   dplyr::summarise(n_calls = n()) %>%
-  dplyr::mutate(Weight.Frequent.Receiver = round(n_calls/sum(n_calls),3)*100) %>%
-  dplyr::arrange(desc(n_calls)) %>%
-  group_by(Source.Section) %>%
-  dplyr::mutate(Num.Calls.Per.SS = sum(n_calls)) %>%
-  dplyr::mutate(Times.splitted = n_distinct(CT.Address)) %>%
-  dplyr::arrange(desc(Num.Calls.Per.SS),  CT.Address, Source.Section, desc(n_calls)) 
+  dplyr::mutate(Weight.Receiver = round(n_calls/sum(n_calls),3)*100) %>%
+  group_by(Source.Section, Symbol, CT.Address) %>%
+  dplyr::arrange(desc(Weight.Receiver), .by_group = TRUE) %>%
+  dplyr::mutate(Num.Calls.Per.SS = sum(n_calls)) 
 
+
+#TODO
 # Selection of most optimizable poly|megamorphic call sites (lots of calls)
 table_optimizable <- distrib_per_call_site %>%
   group_by(Source.Section) %>%
@@ -284,25 +300,6 @@ split_call_site$Source.Section <- str_trunc(split_call_site$Source.Section, 25, 
 split_call_site_more <- split_call_site %>%
     filter(Times.splitted > 1)
 
-############################################## TABLE GENERATION ############################################## 
-
-distrib_ct_table <- xtable(data_summary_num_targets_original, caption = "Distribution of call-targets")
-distrib_ct_table <- autoformat(distrib_ct_table, zap = getOption("digits"))
-
-hottest_mega_ct_table <- xtable(table_optimizable_aux, caption = "Hottest megamorphic call sites")
-hottest_mega_ct_table <- autoformat(hottest_mega_ct_table, zap = getOption("digits"))
-
-hottest_30mega_ct_table <- xtable(head(table_optimizable_aux,30), caption = "Hottest megamorphic call sites")
-hottest_30mega_ct_table <- autoformat(hottest_30mega_ct_table, zap = getOption("digits"))
-
-distrib_split_per_ct_table <- xtable(split_call_site, caption = "Distribution of splits per target")
-distrib_split_per_ct_table <- autoformat(distrib_split_per_ct_table, zap = getOption("digits"))
-
-distrib_2plus_split_per_ct_table <- xtable(split_call_site_more, caption = "Distribution of splits per target")
-distrib_2plus_split_per_ct_table <- autoformat(distrib_2plus_split_per_ct_table, zap = getOption("digits"))
-
-most_executed <- xtable(head(most_executed, 35), caption = "Most executed call-sites")
-most_executed <- autoformat(most_executed, zap = getOption("digits"))
 
 
 ############################################## SUMMARY TABLE GENERATION ACCORDING TO CACHE TYPE ############################################## 
@@ -406,8 +403,52 @@ if (is.integer0(num_mega$Cumulative)) {
   num_mega <- head(num_mega$Cumulative,1)
 }
 
-############################################## TABLE SAVING ##############################################
+############################################## TABLES ###############################################    
 
+## TABLE GENERATION
+# Distribution of call targets
+distrib_cache_size_obs_no_splitting <- xtable(num_target_observed, caption = "Distribution of call-targets (Observed) - Splitting ignored")
+distrib_cache_size_obs_no_splitting <- autoformat(num_target_observed, zap = getOption("digits"))
+
+distrib_cache_size_original_no_splitting <- xtable(num_target_original, caption = "Distribution of call-targets (Original) - Splitting ignored")
+distrib_cache_size_original_no_splitting <- autoformat(num_target_original, zap = getOption("digits"))
+
+distrib_cache_size_obs_splitting <- xtable(num_target_observed_w_splitting, caption = "Distribution of call-targets (Observed) - Splitting acknowledged")
+distrib_cache_size_obs_splitting <- autoformat(num_target_observed_w_splitting, zap = getOption("digits"))
+
+distrib_cache_size_original_splitting <- xtable(num_target_original_w_splitting, caption = "Distribution of call-targets (Original) - Splitting acknowledged")
+distrib_cache_size_original_splitting <- autoformat(num_target_original_w_splitting, zap = getOption("digits"))
+
+# Target polymorphism
+target_polymorphism <- xtable(summary_cache_change, caption = "Distribution of call-targets (Observed) - Splitting ignored")
+target_polymorphism <- autoformat(summary_cache_change, zap = getOption("digits"))
+
+target_polymorphism_detail <- xtable(summary_cache_change_detail, caption = "Distribution of call-targets (Observed) - Splitting ignored")
+target_polymorphism_detail <- autoformat(summary_cache_change_detail, zap = getOption("digits"))
+
+target_polymorphism_turbo <- xtable(summary_cache_change_detail_turbo, caption = "Distribution of call-targets (Observed) - Splitting ignored")
+target_polymorphism_turbo <- autoformat(summary_cache_change_detail_turbo, zap = getOption("digits"))
+
+# Hottest call-sites
+# TODO
+hottest_mega_ct_table <- xtable(table_optimizable_aux, caption = "Hottest megamorphic call sites")
+hottest_mega_ct_table <- autoformat(hottest_mega_ct_table, zap = getOption("digits"))
+
+hottest_30mega_ct_table <- xtable(head(table_optimizable_aux,30), caption = "Hottest megamorphic call sites")
+hottest_30mega_ct_table <- autoformat(hottest_30mega_ct_table, zap = getOption("digits"))
+
+most_executed <- xtable(head(most_executed, 35), caption = "Most executed call-sites")
+most_executed <- autoformat(most_executed, zap = getOption("digits"))
+
+# Splitting 
+# TODO
+distrib_split_per_ct_table <- xtable(split_call_site, caption = "Distribution of splits per target")
+distrib_split_per_ct_table <- autoformat(distrib_split_per_ct_table, zap = getOption("digits"))
+
+distrib_2plus_split_per_ct_table <- xtable(split_call_site_more, caption = "Distribution of splits per target")
+distrib_2plus_split_per_ct_table <- autoformat(distrib_2plus_split_per_ct_table, zap = getOption("digits"))
+
+## TABLE SAVING
 table_folder <- paste(now,"summary_tables",sep="/")
 dir.create(table_folder)
 print(xtable(distrib_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"call_target_distrib.tex", sep="/"))
