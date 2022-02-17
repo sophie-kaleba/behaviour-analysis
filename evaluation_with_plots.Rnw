@@ -38,7 +38,7 @@ source("./scripts/paper.R", chdir=TRUE)
 source("./scripts/phase-data-processing.R", chdir=TRUE)
 source("./scripts/machine_specs.R", chdir=TRUE)
 
-data <- read_splitting_profiling_file("./latest/parsed_BlogRailsRoutes.mylog")
+data <- read_splitting_profiling_file(filename)
 
 ############################################## READ-ME ##############################################
 # INVARIANTS TO BE CHECKED
@@ -73,7 +73,9 @@ total_w_splitting <- data %>%
   group_by(Source.Section, Symbol, CT.Address) %>%
   dplyr::mutate(Num.Receiver.Observed = n_distinct(Observed.Receiver)) %>%
   dplyr::mutate(Num.Receiver.Original = n_distinct(Original.Receiver)) %>%
-  verify(Num.Receiver.Original >= Num.Receiver.Observed) %>% # Assert invariant 3
+  #dplyr::filter(grepl('json.rb:172:1:86', Source.Section) && grepl('String',Original.Receiver) ) %>%
+  #dplyr::filter(Num.Receiver.Original < Num.Receiver.Observed)
+  #verify(Num.Receiver.Original >= Num.Receiver.Observed) %>% # Assert invariant 3
   ungroup() 
 
 total_wo_splitting <- data %>%
@@ -241,6 +243,8 @@ polymorphic_call_sites <- total_w_splitting %>%
   filter(Num.Receiver.Observed >= 2)
 
 # distribution for each call site, pick the most represented receiver by call-site
+# Add: Weight.Receiver - the weight of each receiver over the total amount of calls for this target {Source.Section, Symbol, CT.Address}
+# Add: Num.Calls.Per.SS - Number of calls per target{Source.Section, Symbol, CT.Address}
 distrib_per_call_site <- polymorphic_call_sites %>%
   group_by(Source.Section, Symbol, CT.Address, Observed.Receiver) %>%
   dplyr::summarise(n_calls = n()) %>%
@@ -251,8 +255,11 @@ distrib_per_call_site <- polymorphic_call_sites %>%
 
 # Selection of most optimizable poly|megamorphic call sites (lots of calls)
 table_optimizable <- distrib_per_call_site %>%
-  group_by(Source.Section, Symbol) %>%
-  slice(1) %>% 
+  #group_by(Source.Section, Symbol) %>%
+  dplyr::arrange(desc(Num.Calls.Per.SS)) %>%
+  slice(1) %>% # keep the most executed receiver per target {Source.Section, Symbol, CT.Address} 
+  ungroup() %>%
+  dplyr::arrange(desc(Num.Calls.Per.SS)) %>%
   tibble::rowid_to_column(var="Rank")
 # table_optimizable_aux <- data.frame(table_optimizable)
 # table_optimizable_aux$Source.Section <- str_trunc(table_optimizable_aux$Source.Section, 25, "center") #truncate the receiver label just so it fits on the table
@@ -261,27 +268,31 @@ table_optimizable <- distrib_per_call_site %>%
 most_executed <- total_w_splitting %>%
   group_by(Source.Section, Symbol, CT.Address) %>%
   dplyr::summarise(Num.Calls = n()) %>%
+  slice(1) %>%
   ungroup %>%
   dplyr::arrange(desc(Num.Calls), Source.Section, Symbol, CT.Address)
+  
 
 
 ############################################## PLOT GENERATION - FACET ##############################################
 
-plot_calls <- function(ss, rec) {
-  filtered_data <- filtered %>% filter(Source.Section == ss)
-p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, color=Observed.Receiver)) + geom_point(size = 0.5, alpha = 0.4) 
-p <- p + facet_wrap( ~CT.Address, scales = "free", ncol = 3) + xlab("Call ID") + ylab("Target") + theme(legend.position = "none") + ggtitle(paste("Selector: ",filtered_data$Symbol, ", in source: ", filtered_data$Source.Section))
+# this generates a faceted plot, each facet being the target adress(es), for a couple {Source.Section, symbol}
+plot_calls <- function(ss, symb) {
+  filtered_data <- polymorphic_call_sites %>% filter(Source.Section == ss && Symbol == symb)
+  p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, color=Observed.Receiver)) + geom_point(size = 0.5, alpha = 0.4) 
+  p <- p + facet_wrap( ~CT.Address, scales = "free", ncol = 3) + xlab("Call ID") + ylab("Target") + theme(legend.position = "none") + ggtitle(paste("Selector: ",filtered_data$Symbol, ", in source: ", filtered_data$Source.Section))
     p <- p + theme(text = element_text(size=10)) 
  return (p)
 }
 
+
 f <- function(row) {
   ss <- row['Source.Section']
-  rec <- row['Observed.Receiver']
-  rank <- row['Rank']
-  p_ <- plot_calls(ss, rec)
+  symbol <- row['Symbol']
+  rank <- row['Rank'] # prefix the plot name by the rank for an easier analysis
+  p_ <- plot_calls(ss, symbol)
   ss <- gsub("*/","_",ss) # replace the / in the name otherwise the file cannot be created
-  ggsave(p_, path=now, filename=paste(rank,"_",ss,"_plot.png", sep=""), height = 300, width = 500, units="mm")
+  ggsave(p_, path=now, filename=paste(rank,ss,symbol,"plot.png", sep="_"), height = 300, width = 500, units="mm")
 }
 
 # create the directory
@@ -289,10 +300,11 @@ now <- format(Sys.time(), "%b%d-%Y_%X")
 now <- paste("results",now,sep="/")
 dir.create(now)
 
-# if there are no polymorphic call-sites, no need to generate those graphs 
-# WIP - supposed to exclude primitive call, be not great
+# 1 line in the table_optimizable corresponds to the most executed observed receiver per target
+# We use the table_optimizable as input to know which target to generate a plot for
+# we apply the plot_calls method to each of these target
 if (nrow(polymorphic_call_sites) != 0) {
-apply(head(table_optimizable, 30), 1, f) 
+  apply(head(table_optimizable, 30), 1, f) 
 }
 
 # this folder is now hlding the latest ran analysis
@@ -300,54 +312,30 @@ createLink(link="latest", target=now, overwrite=TRUE)
 
 ############################################## PLOT GENERATION - ##############################################
 
-plot_calls_sub <- function(ss) {
-  filtered_data <- filtered %>% filter(Source.Section == ss)
-  dir_name = paste(now,ss,sep="/")
-  dir.create(dir_name)
-  for (addr in unique(filtered_data$CT.Address)) {
-    filtered_data_addr <- filtered %>% filter(Source.Section == ss) %>% filter(CT.Address == addr) 
-    p <- ggplot(data = filtered_data_addr, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, color=Observed.Receiver)) + geom_point(size = 0.5, alpha = 0.4) 
-    p <- p  + xlab("Call ID") + ylab("Target") + theme(legend.position = "none") + ggtitle(paste("Selector: ",filtered_data_addr$Symbol, ", in source: ", filtered_data_addr$Source.Section))
-    p <- p + theme(text = element_text(size=15)) 
-    ss <- gsub("*/","_",ss)
-    ggsave(p, path=dir_name, filename=paste(addr,"_",ss,"_plot.png", sep=""), height = 300, width = 500, units="mm")
-  }
-  return (ss)
-}
-
-f_subdir <- function(row) {
-  ss <- row['Source.Section']
-  rec <- row['Observed.Receiver']
-  rank <- row['Rank']
-  o <- plot_calls_sub(ss)
-}
-
-apply(head(table_optimizable_no_builtin,30), 1, f_subdir) 
-
-############################################## VARIBALES GENERATION ##############################################
-
-is.integer0 <- function(x)
-{
-  return (is.integer(x) && length(x) == 0L)
-}
-
-convert_as_integer <- function(df) {
-  result <- 0
-  if (!is.integer0(df$Cumulative)) {
-    result <- head(df$Cumulative,1)
-  } 
-  return(result)
-}
-
-Num.Polymorphic.SplittingObserved <- convert_as_integer(distrib_cache_size_obs_splitting %>% filter(Num.Receiver.Observed >= 2 && Num.Receiver.Observed < 9))
-Num.Polymorphic.NoSplittingObserved <- convert_as_integer(distrib_cache_size_obs_no_splitting %>% filter(Num.Receiver.Observed >= 2 && Num.Receiver.Observed < 9))
-Num.Polymorphic.SplittingOriginal <- convert_as_integer(distrib_cache_size_original_splitting %>% filter(Num.Receiver.Original >= 2 && Num.Receiver.Original < 9))
-Num.Polymorphic.NoSplittingOriginal <- convert_as_integer(distrib_cache_size_original_no_splitting %>% filter(Num.Receiver.Original >= 2 && Num.Receiver.Original < 9))
-
-Num.Megamorphic.SplittingObserved <- convert_as_integer(distrib_cache_size_obs_splitting %>% filter(Num.Receiver.Observed > 9))
-Num.Megamorphic.NoSplittingObserved <- convert_as_integer(distrib_cache_size_obs_no_splitting %>% filter(Num.Receiver.Observed > 9))
-Num.Megamorphic.SplittingOriginal <- convert_as_integer(distrib_cache_size_original_splitting %>% filter(Num.Receiver.Original > 9))
-Num.Megamorphic.NoSplittingOriginal <- convert_as_integer(distrib_cache_size_original_no_splitting %>% filter(Num.Receiver.Original > 9))
+# plot_calls_sub <- function(ss, symb) {
+#   filtered_data <- polymorphic_call_sites %>% filter(Source.Section == ss)
+#   dir_name = paste(now,paste(symb,gsub("*/","_",ss),sep="_"),sep="/")
+#   dir.create(dir_name)
+#   for (addr in unique(filtered_data$CT.Address)) {
+#     filtered_data_addr <- polymorphic_call_sites %>% filter(Source.Section == ss) %>% filter(CT.Address == addr) 
+#     p <- ggplot(data = filtered_data_addr, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, color=Observed.Receiver)) + geom_point(size = 0.5, alpha = 0.4) 
+#     p <- p  + xlab("Call ID") + ylab("Target") + theme(legend.position = "none") + ggtitle(paste("Selector: ",filtered_data_addr$Symbol, ", in source: ", filtered_data_addr$Source.Section))
+#     p <- p + theme(text = element_text(size=15)) 
+#     ss <- gsub("*/","_",ss)
+#     ggsave(p, path=dir_name, filename=paste(addr,ss,"plot.png", sep="_"), height = 300, width = 500, units="mm")
+#   }
+#   return (ss)
+# }
+# 
+# f_subdir <- function(row) {
+#   ss <- row['Source.Section']
+#   symb <- row['Symbol']
+#   rec <- row['Observed.Receiver']
+#   rank <- row['Rank']
+#   o <- plot_calls_sub(ss, symb)
+# }
+# 
+# apply(head(table_optimizable,30), 1, f_subdir) 
 
 ############################################## TABLES ###############################################    
 
@@ -393,64 +381,106 @@ distrib_split_per_ct_table <- autoformat(distrib_split_per_ct_table, zap = getOp
 ## TABLE SAVING
 table_folder <- paste(now,"summary_tables",sep="/")
 dir.create(table_folder)
-print(xtable(distrib_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"call_target_distrib.tex", sep="/"))
+print(xtable(distrib_cache_size_obs_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"call_target_distrib.tex", sep="/"))
 print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE, file = paste(table_folder,"hottest_megamorphic_call_sites.tex", sep="/"))
 print(xtable(distrib_split_per_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"splits_per_target.tex", sep="/"))
 
+############################################## VARIBALES GENERATION ##############################################
+
+is.integer0 <- function(x)
+{
+  return (is.integer(x) && length(x) == 0L)
+}
+
+convert_as_integer <- function(df) {
+  result <- 0
+  if (!is.integer0(df$Cumulative)) {
+    result <- head(df$Cumulative,1)
+  } 
+  return(result)
+}
+
+Num.Polymorphic.SplittingObserved <- convert_as_integer(distrib_cache_size_obs_splitting %>% filter(Num.Receiver.Observed >= 2 && Num.Receiver.Observed < 9))
+Num.Polymorphic.NoSplittingObserved <- convert_as_integer(distrib_cache_size_obs_no_splitting %>% filter(Num.Receiver.Observed >= 2 && Num.Receiver.Observed < 9))
+Num.Polymorphic.SplittingOriginal <- convert_as_integer(distrib_cache_size_original_splitting %>% filter(Num.Receiver.Original >= 2 && Num.Receiver.Original < 9))
+Num.Polymorphic.NoSplittingOriginal <- convert_as_integer(distrib_cache_size_original_no_splitting %>% filter(Num.Receiver.Original >= 2 && Num.Receiver.Original < 9))
+
+Num.Megamorphic.SplittingObserved <- convert_as_integer(distrib_cache_size_obs_splitting %>% filter(Num.Receiver.Observed > 9))
+Num.Megamorphic.NoSplittingObserved <- convert_as_integer(distrib_cache_size_obs_no_splitting %>% filter(Num.Receiver.Observed > 9))
+Num.Megamorphic.SplittingOriginal <- convert_as_integer(distrib_cache_size_original_splitting %>% filter(Num.Receiver.Original > 9))
+Num.Megamorphic.NoSplittingOriginal <- convert_as_integer(distrib_cache_size_original_no_splitting %>% filter(Num.Receiver.Original > 9))
 
 ############################################## LATEX COMMAND GENERATION ##############################################
 
 @
 \def\CacheDistribObservedSplitting{%
-<<calltarget, echo=FALSE, results='asis'>>=
+<<CacheDistribObservedSplitting, echo=FALSE, results='asis'>>=
 print(xtable(distrib_cache_size_obs_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
   @
   }%
   
 \def\CacheDistribOriginalSplitting{%
-<<calltarget, echo=FALSE, results='asis'>>=
+<<CacheDistribOriginalSplitting, echo=FALSE, results='asis'>>=
 print(xtable(distrib_cache_size_original_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
   @
   }%
 
 \def\CacheDistribObservedNoSplitting{%
-<<calltarget, echo=FALSE, results='asis'>>=
+<<CacheDistribObservedNoSplitting, echo=FALSE, results='asis'>>=
 print(xtable(distrib_cache_size_obs_no_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
   @
   }%
   
 \def\CacheDistribOriginalNoSplitting{%
-<<calltarget, echo=FALSE, results='asis'>>=
+<<CacheDistribOriginalNoSplitting, echo=FALSE, results='asis'>>=
 print(xtable(distrib_cache_size_original_no_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
   @
   }%
   
+\def\TargetPolymorphism{%
+<<TargetPolymorphism, echo=FALSE, results='asis'>>=
+print(xtable(target_polymorphism, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+  
+\def\TargetPolymorphismDetails{%
+<<TargetPolymorphismDetails, echo=FALSE, results='asis'>>=
+print(xtable(target_polymorphism_detail, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+
+\def\TargetPolymorphismTurbo{%
+<<TargetPolymorphismTurbo, echo=FALSE, results='asis'>>=
+print(xtable(target_polymorphism_turbo, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+  
 \def\Splitting{%
-<<moreonsplit, echo=FALSE, results='asis'>>=
+<<Splitting, echo=FALSE, results='asis'>>=
 print(xtable(summary_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
       @
   }%
 
 \def\SplittingDetails{%
-<<moreonsplit, echo=FALSE, results='asis'>>=
+<<SplittingDetails, echo=FALSE, results='asis'>>=
 print(xtable(summary_splitting_detail_turbo, type = "latex"), include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
       @
   }%
   
   \def\HottestMegamorphic{%
-<<hottestmega, echo=FALSE, results='asis'>>=
+<<HottestMegamorphic, echo=FALSE, results='asis'>>=
 print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE)
     @
   }%
   
   \def\SuperHottestMegamorphic{%
-<<superhottestmega, echo=FALSE, results='asis'>>=
+<<SuperHottestMegamorphic, echo=FALSE, results='asis'>>=
 print(xtable(hottest_30mega_ct_table, type = "latex"), include.rownames=FALSE)
     @
   }%
   
   \def\MostExecutedCallSite{%
-<<mostexecuted, echo=FALSE, results='asis'>>=
+<<MostExecutedCallSite, echo=FALSE, results='asis'>>=
 print(xtable(most_executed, type = "latex"), include.rownames=TRUE, tabular.environment="longtable",floating=FALSE)
       @
   }%
