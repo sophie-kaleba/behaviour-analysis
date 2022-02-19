@@ -38,7 +38,7 @@ source("./scripts/paper.R", chdir=TRUE)
 source("./scripts/phase-data-processing.R", chdir=TRUE)
 source("./scripts/machine_specs.R", chdir=TRUE)
 
-data <- read_splitting_profiling_file(filename)
+data <- read_splitting_profiling_file("./latest/parsed_DeltaBlue.mylog")
 
 ############################################## READ-ME ##############################################
 # INVARIANTS TO BE CHECKED
@@ -230,11 +230,67 @@ summary_splitting <- generate_splitting_summary(total_w_splitting, c("Source.Sec
   dplyr::arrange(desc(Times.splitted)) 
 
 col <- c("Source.Section", "Symbol", "CT.Address", "Original.Receiver", "Observed.Receiver", "Num.Receiver.Observed", "Num.Receiver.Original")
-summary_splitting_detail_turbo <- generate_splitting_summary(total_w_splitting, col) %>%
+summary_splitting_detail_turbo <- generate_splitting_summary(total_w_splitting, all_of(col)) %>%
   group_by(Source.Section, Symbol, CT.Address) %>%
   slice(1) %>%
   dplyr::arrange(desc(Times.splitted)) 
 
+# Was splitting useful? State of lookup cache after splitting
+effect_splitting <- total_w_splitting %>%
+  group_by(Source.Section, Symbol) %>%
+  dplyr::mutate(Times.splitted = n_distinct(CT.Address) - 1) %>%  # -1 otherwise we count the call-sites that have one call target (ie not splitted)
+  dplyr::filter(Times.splitted > 0) %>%
+  dplyr::filter(Source.Section != "(core):1:1:0" && Source.Section != "(unavailable):1:1:0") %>%
+  ungroup %>%
+  group_by(Source.Section, Symbol, CT.Address) %>%
+  dplyr::arrange(.by_group = TRUE) %>%
+  filter(row_number() == 1  ) %>%  #keep first and last of each group, this way we can sort 
+  dplyr::arrange(Source.Section, Symbol, Call.ID) 
+
+# for each group {Source.Section, Symbol}
+#     order each subgroup {CT.Address} against one another, and give them a rank
+#     then compare each subgroup with its n-1 and n+1 and check the evolution of their cache
+
+effect_splitting <- effect_splitting %>%
+  group_by(Source.Section, Symbol) %>%
+  dplyr::mutate(Group.ID = cur_group_id()) %>%
+  ungroup() %>%
+  group_by(Source.Section, Symbol, CT.Address) %>%
+  dplyr::mutate(Sub.Group.ID = cur_group_id()) %>%
+  dplyr::arrange(Sub.Group.ID, Call.ID) 
+
+effect_splitting <- effect_splitting %>%
+    ungroup %>%
+    group_by(Group.ID) %>%
+    dplyr::filter(any(Cache.Type.Observed== 'POLY')) %>%
+    group_by(Group.ID, Sub.Group.ID) %>%
+    dplyr::arrange(Group.ID, Call.ID, Sub.Group.ID) %>%
+    ungroup() %>%
+    dplyr::select(Call.ID, Symbol, Source.Section, CT.Address, Cache.Type.Observed, Group.ID, Sub.Group.ID) 
+
+# After many convoluted moves, this table is the one 
+# TODO - This is NOT taking into account different set of receivers, but it should
+effect_splitting <- effect_splitting %>%
+  ungroup() %>%
+  dplyr::arrange(Source.Section, Symbol, Call.ID) %>%
+  group_by(Source.Section, Symbol) %>%
+  dplyr::mutate(prev=dplyr::lag(Cache.Type.Observed)) %>%
+  dplyr::mutate(Splitting.Effect = case_when(is.na(prev) ~ 0,
+                                             prev == 'POLY' & Cache.Type.Observed == 'MONO' ~ 0,
+                                             prev == 'MEGA' & Cache.Type.Observed == 'MONO' ~ 0, 
+                                             prev == 'MEGA' & Cache.Type.Observed == 'POLY' ~ 0,
+                                             prev == Cache.Type.Observed ~ 0,
+                                             prev == 'MONO' & Cache.Type.Observed == 'POLY' ~ 1,
+                                             prev == 'MONO' & Cache.Type.Observed == 'MEGA' ~ 1,
+                                             prev == 'POLY' & Cache.Type.Observed == 'MEGA' ~ 1) )    
+
+# Summarises the splitting behaviour
+# Check each splitting transition
+effect_splitting_summary <- effect_splitting %>%
+  ungroup() %>%
+  group_by(prev, Cache.Type.Observed) %>%
+  dplyr::summarise(n())
+  
 ############################################## MANUAL INSPECTION ############################################## 
 
 # to filter out by the number of targets and only keep polymoprhic call-sites 
@@ -255,14 +311,12 @@ distrib_per_call_site <- polymorphic_call_sites %>%
 
 # Selection of most optimizable poly|megamorphic call sites (lots of calls)
 table_optimizable <- distrib_per_call_site %>%
-  #group_by(Source.Section, Symbol) %>%
+  group_by(Source.Section, Symbol) %>%
   dplyr::arrange(desc(Num.Calls.Per.SS)) %>%
   slice(1) %>% # keep the most executed receiver per target {Source.Section, Symbol, CT.Address} 
   ungroup() %>%
   dplyr::arrange(desc(Num.Calls.Per.SS)) %>%
   tibble::rowid_to_column(var="Rank")
-# table_optimizable_aux <- data.frame(table_optimizable)
-# table_optimizable_aux$Source.Section <- str_trunc(table_optimizable_aux$Source.Section, 25, "center") #truncate the receiver label just so it fits on the table
 
 # to get an idea of the most executed call-sites
 most_executed <- total_w_splitting %>%
@@ -374,6 +428,11 @@ most_executed <- xtable(head(most_executed, 35), caption = "Most executed call-s
 most_executed <- autoformat(most_executed, zap = getOption("digits"))
 
 # Splitting 
+splitting_table <- xtable(head(summary_splitting %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='center'), 30), type = "latex")
+splitting_table <- autoformat(splitting_table, zap = getOption("digits"))
+
+effect_splitting_table <- xtable(effect_splitting_summary %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='center'), type = "latex")
+effect_splitting_table <- autoformat(effect_splitting_table, zap = getOption("digits"))
 # TODO
 distrib_split_per_ct_table <- xtable(summary_splitting, caption = "Distribution of splits per target")
 distrib_split_per_ct_table <- autoformat(distrib_split_per_ct_table, zap = getOption("digits"))
@@ -384,6 +443,7 @@ dir.create(table_folder)
 print(xtable(distrib_cache_size_obs_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"call_target_distrib.tex", sep="/"))
 print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE, file = paste(table_folder,"hottest_megamorphic_call_sites.tex", sep="/"))
 print(xtable(distrib_split_per_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"splits_per_target.tex", sep="/"))
+print(xtable(summary_splitting_detail_turbo %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='center'), type = "latex"), include.rownames=FALSE, tabular.environment="longtable", floating=FALSE,  file = paste(table_folder,"splitting_details.tex", sep="/"))
 
 ############################################## VARIBALES GENERATION ##############################################
 
@@ -399,6 +459,8 @@ convert_as_integer <- function(df) {
   } 
   return(result)
 }
+
+
 
 Num.Polymorphic.SplittingObserved <- convert_as_integer(distrib_cache_size_obs_splitting %>% filter(Num.Receiver.Observed >= 2 && Num.Receiver.Observed < 9))
 Num.Polymorphic.NoSplittingObserved <- convert_as_integer(distrib_cache_size_obs_no_splitting %>% filter(Num.Receiver.Observed >= 2 && Num.Receiver.Observed < 9))
@@ -454,19 +516,19 @@ print(xtable(target_polymorphism_detail, type = "latex"), include.rownames=FALSE
 print(xtable(target_polymorphism_turbo, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
   @
   }%
-  
+
 \def\Splitting{%
 <<Splitting, echo=FALSE, results='asis'>>=
-print(xtable(summary_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
+print(splitting_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
+      @
+  }%
+  
+  \def\EffectSplitting{%
+<<EffectSplitting, echo=FALSE, results='asis'>>=
+print(effect_splitting_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
       @
   }%
 
-\def\SplittingDetails{%
-<<SplittingDetails, echo=FALSE, results='asis'>>=
-print(xtable(summary_splitting_detail_turbo, type = "latex"), include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
-      @
-  }%
-  
   \def\HottestMegamorphic{%
 <<HottestMegamorphic, echo=FALSE, results='asis'>>=
 print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE)

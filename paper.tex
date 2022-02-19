@@ -25,6 +25,7 @@
 \usepackage{geometry}
 \usepackage{longtable}
 \usepackage{url}
+\setcopyright{none}
 
 \geometry{legalpaper, margin=1in}
 \tikzstyle{every picture}+=[font=\sffamily]
@@ -62,31 +63,46 @@ The following table lists the thirty most executed call-sites within this execut
 Within this execution, \NumOfSplittedTargets call-sites have been splitted.
 Some call-targets have been splitted several times; the following table list all the call targets that have been splitted.
 
-\MoreThanOneSplit
+\newpage
+
+\Splitting
 
 \subsection{Type of lookup caches}
 
-Within the \NumberCallSites call-sites, \NumberPolymorphic were polymorphic (more than 1 targets), of which \NumberMegamorphic were megamorphic (more than 8 targets).
-The following table lists the detailed distribution of targets per call-site.
+\subsubsection{Receiver polymorphism}
 
-\CallTargetDistrib
+\paragraph{Observed (Splitting incl.)} 
+\CacheDistribObservedSplitting
+ 
+%\CacheDistribObservedNoSplitting
 
-The following table displays basic summary data based on the type of lookup cache.
+\paragraph{Original (Splitting incl.)} 
+%\paragraph{Splitting} 
+\CacheDistribOriginalSplitting
 
-\SummaryPerLookupCache
+%\paragraph{NoSplitting} 
+%\CacheDistribOriginalNoSplitting
 
-\subsection{Type of call-sites as per ruby semantics}
+\subsubsection{Target polymorphism}
 
-There are XXXX different types of calls in Ruby:
-\begin{itemize}
-\item 
-\item 
-\item 
-\end{itemize}
+Within the \NumberCallSitesSplitting call-sites, \HasExperiencedTP call-sites have experienced target polymorphism, of which \HasChangedStatus have changed status.
 
-The following table displays basic summary data based on the type of ruby call-site.
+\TargetPolymorphism
 
-\SummaryPerRubyCallSite
+\TargetPolymorphismDetails
+
+%\subsection{Type of call-sites as per ruby semantics}
+%
+%%There are XXXX different types of calls in Ruby:
+%%\begin{itemize}
+%%\item 
+%%\item 
+%%\item 
+%%\end{itemize}
+%
+%The following table displays basic summary data based on the type of ruby call-site.
+
+
 
 \section{Identifying patterns in execution}
 
@@ -106,21 +122,11 @@ A manual inspection is then required to identify potential phases based on the l
 
 \appendix
 
-\section{Polymorphism}
-This table list the top 
-
-\begin{landscape}
-
-\HottestMegamorphic{}
-
-\end{landscape}
-
 \section{Splitting}
 
 This table lists all the splits that were performed
 
-\SplitDistrib{}
-
+\EffectSplitting
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{sample-base}
