@@ -65,31 +65,59 @@ Some call-targets have been splitted several times; the following table list all
 
 \newpage
 
-\Splitting
+\begin{figure}[h]
+  \centering
+  \Splitting
+  \caption{
+    30th most splitted targets}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \EffectSplitting
+  \caption{
+    Effect of splitting on lookup-cache status}
+\end{figure}
+
 
 \subsection{Type of lookup caches}
 
 \subsubsection{Receiver polymorphism}
 
-\paragraph{Observed (Splitting incl.)} 
-\CacheDistribObservedSplitting
- 
-%\CacheDistribObservedNoSplitting
+\begin{figure}[h]
+  \centering
+  \CacheDistribObservedSplitting
+  \caption{
+    Observed cache distribution}
+\end{figure}
 
-\paragraph{Original (Splitting incl.)} 
-%\paragraph{Splitting} 
-\CacheDistribOriginalSplitting
 
-%\paragraph{NoSplitting} 
-%\CacheDistribOriginalNoSplitting
+\begin{figure}[h]
+  \centering
+  \CacheDistribOriginalSplitting
+  \caption{
+    Original cache distribution}
+\end{figure}
+
 
 \subsubsection{Target polymorphism}
 
 Within the \NumberCallSitesSplitting call-sites, \HasExperiencedTP call-sites have experienced target polymorphism, of which \HasChangedStatus have changed status.
 
-\TargetPolymorphism
+\begin{figure}[h]
+  \centering
+  \TargetPolymorphism
+  \caption{
+    Impact of optimization regarding target polymorphism}
+\end{figure}
 
-\TargetPolymorphismDetails
+\begin{figure}[h]
+  \centering
+  \TargetPolymorphismDetails
+  \caption{
+    Detailed impact with the evolution of cache entries}
+\end{figure}
+
 
 %\subsection{Type of call-sites as per ruby semantics}
 %
