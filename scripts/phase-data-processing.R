@@ -43,7 +43,7 @@ read_simple_profiling_file <- function(filename) {
 }
 
 read_splitting_profiling_file <- function(filename) {
-  row_names <- c("Symbol", "Receiver", "Source.Section", "CT.Address", "Builtin?")
+  row_names <- c("Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver")
 
   data <- read.csv(filename, header = FALSE, sep = "\t", row.names=NULL, col.names=row_names)
   return(data)
