@@ -1,20 +1,28 @@
 all: run parse knitr pdf reorganize clean
 
-SYSTEM_RUBY = "/home/sopi/.rbenv/versions/2.7.3/bin/ruby"
+SYSTEM_RUBY = "/home/sopi/.rbenv/versions/3.0.0/bin/ruby"
 JT="/home/sopi/Documents/Side_projects/truffleruby/tool/jt.rb"
 RAW_INPUT = raw_${benchmark_name}.log
 PARSED_INPUT = parsed_${benchmark_name}
 SPLIT_SUMMARY = split_$(PARSED_INPUT)
+FLAGS = --splitting
+MODE = ""
 
 run:
-	$(SYSTEM_RUBY) $(JT) --use jvm-ce ruby --vm.Dpolyglot.log.file="raw_${benchmark_name}.log" --splitting  /home/sopi/Documents/Side_projects/truffleruby/bench/phase/harness-behaviour.rb ${benchmark_name} ${iterations} ${inner_iterations} 
+	echo "[RUNNING ${benchmark_name} ...]"
+	$(SYSTEM_RUBY) $(JT) --use jvm-ce ruby --vm.Dpolyglot.log.file="raw_${benchmark_name}.log"  $(FLAGS)  /home/sopi/Documents/Side_projects/truffleruby/bench/phase/harness-behaviour.rb ${benchmark_name} ${iterations} ${inner_iterations} 
+	echo "[RUNNING... DONE]"
 
 parse:
+	echo "[PARSING ...]"
 	python3 parse_morse_log.py $(RAW_INPUT) $(PARSED_INPUT).mylog 
-
+	echo "[PARSING... DONE]"
+	
 knitr:
-	Rscript knit.R evaluation_with_plots.Rnw gen-eval.tex $(PARSED_INPUT).mylog ${benchmark_name} ${iterations} ${inner_iterations}  
+	echo "[GENERATING TEX FILE ...]"
+	Rscript knit.R $(MODE)evaluation_with_plots.Rnw gen-eval.tex $(PARSED_INPUT).mylog ${benchmark_name} ${iterations} ${inner_iterations}  
 	cp paper.tex $(PARSED_INPUT).tex
+	echo "[GENERATING TEX FILE... DONE]"
 
 reorganize:
 	mv $(SPLIT_SUMMARY).mylog latest/$(SPLIT_SUMMARY).mylog
