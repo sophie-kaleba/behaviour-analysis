@@ -40,7 +40,7 @@ source("./scripts/paper.R", chdir=TRUE)
 source("./scripts/phase-data-processing.R", chdir=TRUE)
 source("./scripts/machine_specs.R", chdir=TRUE)
 
-data <- read_splitting_profiling_file("./parsed_DeltaBlue.mylog")
+data <- read_splitting_profiling_file(filename)
 
 ############################################## READ-ME ##############################################
 # INVARIANTS TO BE CHECKED
@@ -139,7 +139,7 @@ compute_num_target_splitting <- function(df_p, num_receiver_column) {
     slice(1) %>% #just keep the first of each source section
     mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites)))) %>%
     mutate(Cumulative.Freq = rev(cumsum(rev(Frequency.Total)))) 
-  df <- df[, c(1, 2, 5, 4, 3, 6)]
+  df <- df[, c(1, 2, 5, 4, 3, 6)] #reorganize columns
   return(df)
 }
 
@@ -154,10 +154,10 @@ total_w_splitting <- total_w_splitting %>%
   ungroup() %>%
   group_by(Source.Section, Symbol, CT.Address) %>%
   dplyr::mutate(Cache.Type.Original = case_when(Num.Receiver.Original == 1 ~ "MONO",
-                                       Num.Receiver.Original > 1 && Num.Receiver.Original <= 8 ~ "POLY",
+                                       Num.Receiver.Original > 1 & Num.Receiver.Original <= 8 ~ "POLY",
                                        Num.Receiver.Original > 8 ~ "MEGA"))%>%
   dplyr::mutate(Cache.Type.Observed = case_when(Num.Receiver.Observed == 1 ~ "MONO",
-                                       Num.Receiver.Observed > 1 && Num.Receiver.Observed <= 8 ~ "POLY",
+                                       Num.Receiver.Observed > 1 & Num.Receiver.Observed <= 8 ~ "POLY",
                                        Num.Receiver.Observed > 8 ~ "MEGA")) 
 
 
@@ -173,9 +173,9 @@ total_w_splitting <- total_w_splitting %>%
   dplyr::mutate(Has.Changed.Status = (Cache.Type.Observed != Cache.Type.Original)) %>%
   dplyr::mutate(Has.Changed.Status.aggr = any(str_detect(Has.Changed.Status, 'TRUE'))) %>%
   dplyr::mutate(Target.Polymorphism.aggr = any(str_detect(Target.Polymorphism, 'TRUE'))) %>%
-  dplyr::mutate(Invalid.Status = case_when(Cache.Type.Original == "MONO" && Num.Targets.Observed == "POLY" ~ 'TRUE',
-                                           Cache.Type.Original == "MONO" && Num.Targets.Observed == "MEGA" ~ 'TRUE',
-                                           Cache.Type.Original == "POLY" && Num.Targets.Observed == "MEGA" ~ 'TRUE')) 
+  dplyr::mutate(Invalid.Status = case_when(Cache.Type.Original == "MONO" & Num.Targets.Observed == "POLY" ~ 'TRUE',
+                                           Cache.Type.Original == "MONO" & Num.Targets.Observed == "MEGA" ~ 'TRUE',
+                                           Cache.Type.Original == "POLY" & Num.Targets.Observed == "MEGA" ~ 'TRUE')) 
 
 assert("Changes of cache status are only allowed from high degree of polymoprhism to low degree of polymoprhism", nrow(total_w_splitting %>%  dplyr::filter(grepl('TRUE', Invalid.Status))) == 0)
 total_w_splitting <- dplyr::select(total_w_splitting, -Invalid.Status) #We can safely drop this column then
@@ -251,7 +251,7 @@ effect_splitting <- total_w_splitting %>%
   group_by(Source.Section, Symbol) %>%
   dplyr::mutate(Times.splitted = n_distinct(CT.Address) - 1) %>%  # -1 otherwise we count the call-sites that have one call target (ie not splitted)
   dplyr::filter(Times.splitted > 0) %>%
-  dplyr::filter(Source.Section != "(core):1:1:0" && Source.Section != "(unavailable):1:1:0") %>%
+  dplyr::filter(Source.Section != "(core):1:1:0" & Source.Section != "(unavailable):1:1:0") %>%
   ungroup %>%
   group_by(Source.Section, Symbol, CT.Address) %>%
   dplyr::arrange(.by_group = TRUE) %>%
@@ -341,7 +341,7 @@ effect_splitting_summary <- effect_splitting %>%
 
 # this generates a faceted plot, each facet being the target adress(es), for a couple {Source.Section, symbol}
 plot_calls <- function(ss, symb) {
-  filtered_data <- polymorphic_call_sites %>% filter(Source.Section == ss && Symbol == symb)
+  filtered_data <- polymorphic_call_sites %>% filter(Source.Section == ss & Symbol == symb)
   p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, color=Observed.Receiver)) + geom_point(size = 0.5, alpha = 0.4) 
   p <- p + facet_wrap( ~CT.Address, scales = "free", ncol = 3) + xlab("Call ID") + ylab("Target") + theme(legend.position = "none") + ggtitle(paste("Selector: ",filtered_data$Symbol, ", in source: ", filtered_data$Source.Section))
     p <- p + theme(text = element_text(size=10)) 
@@ -502,10 +502,10 @@ convert_as_integer <- function(df) {
   return(result)
 }
 
-Num.Polymorphic.SplittingObserved <- convert_as_integer(distrib_cache_size_obs_splitting %>% filter(Num.Receiver.Observed >= 2 && Num.Receiver.Observed < 9))
-Num.Polymorphic.NoSplittingObserved <- convert_as_integer(distrib_cache_size_obs_no_splitting %>% filter(Num.Receiver.Observed >= 2 && Num.Receiver.Observed < 9))
-Num.Polymorphic.SplittingOriginal <- convert_as_integer(distrib_cache_size_original_splitting %>% filter(Num.Receiver.Original >= 2 && Num.Receiver.Original < 9))
-Num.Polymorphic.NoSplittingOriginal <- convert_as_integer(distrib_cache_size_original_no_splitting %>% filter(Num.Receiver.Original >= 2 && Num.Receiver.Original < 9))
+Num.Polymorphic.SplittingObserved <- convert_as_integer(distrib_cache_size_obs_splitting %>% filter(Num.Receiver.Observed >= 2 & Num.Receiver.Observed < 9))
+Num.Polymorphic.NoSplittingObserved <- convert_as_integer(distrib_cache_size_obs_no_splitting %>% filter(Num.Receiver.Observed >= 2 & Num.Receiver.Observed < 9))
+Num.Polymorphic.SplittingOriginal <- convert_as_integer(distrib_cache_size_original_splitting %>% filter(Num.Receiver.Original >= 2 & Num.Receiver.Original < 9))
+Num.Polymorphic.NoSplittingOriginal <- convert_as_integer(distrib_cache_size_original_no_splitting %>% filter(Num.Receiver.Original >= 2 & Num.Receiver.Original < 9))
 
 Num.Megamorphic.SplittingObserved <- convert_as_integer(distrib_cache_size_obs_splitting %>% filter(Num.Receiver.Observed >= 9))
 Num.Megamorphic.NoSplittingObserved <- convert_as_integer(distrib_cache_size_obs_no_splitting %>% filter(Num.Receiver.Observed >= 9))
