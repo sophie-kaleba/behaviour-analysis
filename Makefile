@@ -21,7 +21,7 @@ parse:
 knitr:
 	echo "[GENERATING TEX FILE ...]"
 	Rscript knit.R $(MODE)evaluation_with_plots.Rnw gen-eval.tex $(PARSED_INPUT).mylog ${benchmark_name} ${iterations} ${inner_iterations}  
-	cp paper.tex $(PARSED_INPUT).tex
+	cp $(MODE)paper.tex $(PARSED_INPUT).tex
 	echo "[GENERATING TEX FILE... DONE]"
 
 reorganize:
