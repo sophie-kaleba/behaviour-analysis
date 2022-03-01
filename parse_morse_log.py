@@ -27,5 +27,5 @@ with open(fin) as fp:
         if not line:
                     break
 
-fout.close()
-split_fout.close()
+    fout.close()
+    split_fout.close()
