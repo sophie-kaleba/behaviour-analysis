@@ -303,7 +303,7 @@ f <- function(row) {
 
 # create the directory
 now <- format(Sys.time(), "%b%d-%Y_%X")
-now <- paste("results",paste("BLOCK","blog",now,sep="_"),sep="/")
+now <- paste("results",paste("BLOCK",benchmark_name,now,sep="_"),sep="/")
 dir.create(now)
 
 # 1 line in the table_optimizable corresponds to the most executed observed receiver per target
@@ -364,22 +364,26 @@ most_executed <- xtable(head(most_executed, 35), caption = "Most executed call-s
 most_executed <- autoformat(most_executed, zap = getOption("digits"))
 
 # Splitting 
-splitting_table <- xtable(head(summary_splitting %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='center'), 30), type = "latex")
-splitting_table <- autoformat(splitting_table, zap = getOption("digits"))
+if (nrow(summary_splitting) != 0) {
+  splitting_table <- xtable(head(summary_splitting %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='center'), 30), type = "latex")
+  splitting_table <- autoformat(splitting_table, zap = getOption("digits"))
 
-effect_splitting_table <- xtable(effect_splitting_summary %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='center'), type = "latex")
-effect_splitting_table <- autoformat(effect_splitting_table, zap = getOption("digits"))
-# TODO
-distrib_split_per_ct_table <- xtable(summary_splitting, caption = "Distribution of splits per target")
-distrib_split_per_ct_table <- autoformat(distrib_split_per_ct_table, zap = getOption("digits"))
+  effect_splitting_table <- xtable(effect_splitting_summary %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='center'), type = "latex")
+  effect_splitting_table <- autoformat(effect_splitting_table, zap = getOption("digits"))
+  # TODO
+  distrib_split_per_ct_table <- xtable(summary_splitting, caption = "Distribution of splits per target")
+  distrib_split_per_ct_table <- autoformat(distrib_split_per_ct_table, zap = getOption("digits"))
+}
 
 ## TABLE SAVING
 table_folder <- paste(now,"summary_tables",sep="/")
 dir.create(table_folder)
 print(xtable(distrib_cache_size_obs_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"call_target_distrib.tex", sep="/"))
 print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE, file = paste(table_folder,"hottest_megamorphic_call_sites.tex", sep="/"))
-print(xtable(distrib_split_per_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"splits_per_target.tex", sep="/"))
-print(xtable(summary_splitting_detail_turbo %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='center'), type = "latex"), include.rownames=FALSE, tabular.environment="longtable", floating=FALSE,  file = paste(table_folder,"splitting_details.tex", sep="/"))
+if (nrow(summary_splitting) != 0) {
+  print(xtable(distrib_split_per_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"splits_per_target.tex", sep="/"))
+  print(xtable(summary_splitting_detail_turbo %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='center'), type = "latex"), include.rownames=FALSE, tabular.environment="longtable", floating=FALSE,  file = paste(table_folder,"splitting_details.tex", sep="/"))
+}
 
 ############################################## VARIBALES GENERATION ##############################################
 
@@ -415,18 +419,6 @@ print(xtable(distrib_cache_size_obs_splitting, type = "latex"), include.rownames
 <<CacheDistribObservedNoSplitting, echo=FALSE, results='asis'>>=
 print(xtable(distrib_cache_size_obs_no_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
   @
-  }%
-
-\def\Splitting{%
-<<Splitting, echo=FALSE, results='asis'>>=
-print(splitting_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
-      @
-  }%
-  
-  \def\EffectSplitting{%
-<<EffectSplitting, echo=FALSE, results='asis'>>=
-print(effect_splitting_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
-      @
   }%
 
   \def\HottestMegamorphic{%
