@@ -1,0 +1,549 @@
+%!TEX root = paper.tex
+<<knitr-load, echo=FALSE, include=FALSE>>=
+if (Sys.getenv("RSTUDIO") == "1") {
+    setwd("/home/sopi/Documents/Side_projects/behaviour-analysis/")
+} else {
+   opts_chunk$set(
+    fig.path="./figure/",
+    fig.keep='all',
+    dev=c('tikz'), #dev='pdf',c('tikz', 'svg'),
+    dev.args=list(pointsize=8, timestamp = FALSE),
+    echo=FALSE,
+    external=FALSE,
+    tidy=FALSE)
+
+  ## Make sure that TikZDevice is used for measuring size of latex labels
+  options(device = function(...) tikzDevice::tikz(tempfile(), ...))
+}
+
+source("./scripts/libraries.R", chdir=TRUE)
+
+data <- load_data_file("./results/AsciidoctorConvertSmall_Feb25-2022_13:32:07/parsed_AsciidoctorConvertSmall.mylog")
+
+############################################## READ-ME ##############################################
+# INVARIANTS TO BE CHECKED
+# 1- A call-site is identified by a unique pair: {Source.Section, Symbol}
+# 2- A target is identified by a unique triple: {Source.Section, Symbol, Receiver}
+# 3- For one call-site, the number of original receivers is necessarily greater or equal to the number of observed receivers
+# 4- There is at least one target per call-site (so the number of targets >= number of call-sites)
+
+# COLUMN DESCRIPTION
+# Source.Section - the lexical location of the call. This is somewhat not 100% reliable, so we pair it with:
+# Symbol - the name of the symbol at this location, to turn it into a unique identifier for the location
+# CT.Address - the hashcode of the target executed at this call-site. Needed to spot whether splitting happened
+# Original.Receiver - class of the receiver of this call, before lookup (could later resolve higher in its class hierarchy)
+# Observed.Receiver - class of the receiver of this call, after lookup 
+
+# VARIABLE DESCRIPTION
+# Num.Call.Sites - The number of call-sites executed in this run (as in number of distinct pair of Source.Section, Symbol)
+# Num.Targets.Original - The total number of different call-targets in this run (before lookup)
+# Num.Targets.Observed - The total number of different call-targets in this run (after lookup)
+
+############################################## MAIN TABLE ############################################## 
+
+# remove any invalid data (extra logging info ignored by parsing)
+data <- data %>% 
+    dplyr::filter(!(Source.Section=="")) %>% 
+    dplyr::filter(!(Builtin. =="PROC" | Builtin. =="LAMBDA" )) %>% 
+    tibble::rowid_to_column(var="Call.ID") %>%
+    dplyr::mutate(Symbol = str_trim(Symbol, side = "both"))
+
+# Add info on the number of call targets per call-site (taking splittng into account)
+# Add: Num.Receiver.Observed, Num.Receiver.Original
+total_w_splitting <- add_number_receivers(data, Call.Site.Target)
+total_wo_splitting <- add_number_receivers(data, Call.Site)
+  
+############################################## VARIABLES ############################################## 
+# Mainly used for latex macro and checking invariants
+
+Num.Call.Sites <- count_things(data, Call.Site)
+Num.Call.Sites.Incl.Splitted <-count_things(data, Call.Site.Target)
+
+Num.Targets.Original <- count_things(total_w_splitting, c(Call.Site.Target, "Num.Receiver.Original"))
+Num.Targets.Observed <- count_things(total_w_splitting, c(Call.Site.Target, "Num.Receiver.Observed"))
+testit::assert("There should not be more call-sites than call targets", Num.Targets.Original >= Num.Call.Sites) # assert invariant 4
+testit::assert("There should not be more call-sites than splitted call sites", Num.Call.Sites.Incl.Splitted >= Num.Call.Sites) 
+
+############################################## POLYMORPHISM ##############################################
+
+num_target_original <- compute_num_target_details(total_wo_splitting, Call.Site, "Original.Receiver")
+num_target_observed <- compute_num_target_details(total_wo_splitting, Call.Site, "Observed.Receiver")
+testit::assert("Both tables should have the same number of call-sites", first(num_target_original$Cumulative.Call.Sites) == first(num_target_observed$Cumulative.Call.Sites))
+testit::assert("... And it should match the total number of call-sites", first(num_target_original$Cumulative.Call.Sites) == Num.Call.Sites)
+
+num_target_original_w_splitting <- compute_num_target_details(total_w_splitting, Call.Site.Target, "Original.Receiver")
+num_target_observed_w_splitting <- compute_num_target_details(total_w_splitting, Call.Site.Target,  "Observed.Receiver")
+testit::assert("Both tables should have the same number of call-sites", first(num_target_original_w_splitting$Cumulative.Call.Sites) == first(num_target_observed_w_splitting$Cumulative.Call.Sites))
+testit::assert("... And it should match the total number of call-sites", first(num_target_original_w_splitting$Cumulative.Call.Sites) == Num.Call.Sites.Incl.Splitted)
+
+# Add the cache type for each call-site
+total_w_splitting <- total_w_splitting %>%
+  ungroup() %>%
+  group_by_at(Call.Site.Target) %>%
+  dplyr::mutate(Cache.Type.Original = case_when(Num.Receiver.Original == 1 ~ "MONO",
+                                       Num.Receiver.Original > 1 & Num.Receiver.Original <= 8 ~ "POLY",
+                                       Num.Receiver.Original > 8 ~ "MEGA"))%>%
+  dplyr::mutate(Cache.Type.Observed = case_when(Num.Receiver.Observed == 1 ~ "MONO",
+                                       Num.Receiver.Observed > 1 & Num.Receiver.Observed <= 8 ~ "POLY",
+                                       Num.Receiver.Observed > 8 ~ "MEGA")) 
+
+
+############################################## TARGET POLYMORPHISM ##############################################
+
+# Add: Target.Polymorphism
+total_w_splitting <- total_w_splitting %>%
+  dplyr::mutate(Target.Polymorphism = (Observed.Receiver != Original.Receiver))
+
+# Add: Has.Changed.Status, Has.Changed.Status.aggr (the aggregated version, ie the final status of this call-site)
+total_w_splitting <- total_w_splitting %>%
+  group_by(Source.Section, Symbol, CT.Address) %>%
+  dplyr::mutate(Has.Changed.Status = (Cache.Type.Observed != Cache.Type.Original)) %>%
+  dplyr::mutate(Has.Changed.Status.aggr = any(str_detect(Has.Changed.Status, 'TRUE'))) %>%
+  dplyr::mutate(Target.Polymorphism.aggr = any(str_detect(Target.Polymorphism, 'TRUE'))) %>%
+  dplyr::mutate(Invalid.Status = case_when(Cache.Type.Original == "MONO" & Num.Targets.Observed == "POLY" ~ 'TRUE',
+                                           Cache.Type.Original == "MONO" & Num.Targets.Observed == "MEGA" ~ 'TRUE',
+                                           Cache.Type.Original == "POLY" & Num.Targets.Observed == "MEGA" ~ 'TRUE')) 
+
+assert("Changes of cache status are only allowed from high degree of polymoprhism to low degree of polymoprhism", nrow(total_w_splitting %>%  dplyr::filter(grepl('TRUE', Invalid.Status))) == 0)
+total_w_splitting <- dplyr::select(total_w_splitting, -Invalid.Status) #We can safely drop this column then
+
+# How many source sections (call-sites) are changing LC status due to TP?
+Has.Experienced.TP <- nrow(total_w_splitting %>% group_by(Source.Section, Symbol, CT.Address) %>% slice(1) %>% filter(Target.Polymorphism.aggr == TRUE)) 
+Has.Changed.Status <- nrow(total_w_splitting %>% group_by(Source.Section, Symbol, CT.Address) %>% slice(1) %>% filter(Has.Changed.Status.aggr == TRUE)) 
+assert("Only call-sites having experienced target polymorphism can experience a change in the status of their cache", Has.Experienced.TP >= Has.Changed.Status)
+
+# give an overview of the evolution of caches after resolving target polymorphism
+summary_cache_change <- total_w_splitting %>%
+      dplyr::select(-Has.Changed.Status, -Target.Polymorphism) %>%
+      group_by(Source.Section, Symbol, CT.Address) %>% 
+      slice(1) %>% 
+      filter(Has.Changed.Status.aggr == TRUE)  %>%
+      group_by(Cache.Type.Original, Cache.Type.Observed) %>%
+      dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol, CT.Address)) %>%
+      select(Cache.Type.Original, Cache.Type.Observed, Num.Call.Sites) %>%
+      slice(1) 
+
+# give an overview of the evolution of caches after resolving target polymorphism
+# at the granularity of cache size
+summary_cache_change_detail <- total_w_splitting %>%
+      dplyr::select(-Has.Changed.Status, -Target.Polymorphism) %>%
+      group_by(Source.Section, Symbol, CT.Address) %>% 
+      filter(Has.Changed.Status.aggr == TRUE)  %>%
+      group_by(Num.Receiver.Original, Num.Receiver.Observed) %>%
+      dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol, CT.Address)) %>%
+      select(Num.Receiver.Original, Num.Receiver.Observed, Num.Call.Sites) %>%
+      slice(1) %>%
+      mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites))))
+      #verify(first(Cumulative) == Has.Changed.Status) # the cumulative amount of TP call-site should be equal to Has.Changed.Status TODO-CHECK ##################################################################
+
+# give an overview of the evolution of caches after resolving target polymorphism
+# at the granularity of cache size
+# and provide details about the concerned call-sites
+summary_cache_change_detail_turbo <- total_w_splitting %>%
+      dplyr::select(-Has.Changed.Status, -Target.Polymorphism) %>%
+      group_by(Source.Section, Symbol, CT.Address) %>% 
+      filter(Has.Changed.Status.aggr == TRUE)  %>%
+      select(Num.Receiver.Original, Num.Receiver.Observed, Symbol, Source.Section, CT.Address, Original.Receiver, Observed.Receiver) %>%
+      dplyr::arrange(Num.Receiver.Original, Num.Receiver.Observed)
+      
+############################################## SPLITTING ##############################################    
+
+# Provide a list of splitted-call sites
+# Add: Times.Splitted, the number of times a call-site has been splitted
+generate_splitting_summary <- function(data, ...) {
+  df <- data %>%
+    select(...) %>%
+    group_by(Source.Section, Symbol) %>%
+    dplyr::mutate(Times.splitted = n_distinct(CT.Address) - 1) %>%  # -1 otherwise we count the call-sites that have one call target (ie not splitted)
+    dplyr::filter(Times.splitted > 0) %>%
+    dplyr::mutate(Num.Calls = n()) %>%
+    dplyr::mutate(Frequency = round(Num.Calls/nrow(data),3)*100)
+  return(df)
+}
+
+summary_splitting <- generate_splitting_summary(total_w_splitting, c("Source.Section", "Symbol", "CT.Address")) %>%
+  select(-CT.Address) %>%
+  slice(1) %>%
+  dplyr::arrange(desc(Frequency)) %>%
+  tibble::rowid_to_column(var="Rank")
+
+col <- c("Source.Section", "Symbol", "CT.Address", "Original.Receiver", "Observed.Receiver", "Num.Receiver.Observed", "Num.Receiver.Original")
+summary_splitting_detail_turbo <- generate_splitting_summary(total_w_splitting, all_of(col)) %>%
+  group_by(Source.Section, Symbol, CT.Address) %>%
+  slice(1) %>%
+  dplyr::arrange(desc(Times.splitted)) 
+
+# Was splitting useful? State of lookup cache after splitting
+effect_splitting <- total_w_splitting %>%
+  group_by(Source.Section, Symbol) %>%
+  dplyr::mutate(Times.splitted = n_distinct(CT.Address) - 1) %>%  # -1 otherwise we count the call-sites that have one call target (ie not splitted)
+  dplyr::filter(Times.splitted > 0) %>%
+  dplyr::filter(Source.Section != "(core):1:1:0" & Source.Section != "(unavailable):1:1:0") %>%
+  ungroup %>%
+  group_by(Source.Section, Symbol, CT.Address) %>%
+  dplyr::arrange(.by_group = TRUE) %>%
+  filter(row_number() == 1  ) %>%  #keep first and last of each group, this way we can sort 
+  dplyr::arrange(Source.Section, Symbol, Call.ID) 
+
+# for each group {Source.Section, Symbol}
+#     order each subgroup {CT.Address} against one another, and give them a rank
+#     then compare each subgroup with its n-1 and n+1 and check the evolution of their cache
+
+effect_splitting <- effect_splitting %>%
+  group_by(Source.Section, Symbol) %>%
+  dplyr::mutate(Group.ID = cur_group_id()) %>%
+  ungroup() %>%
+  group_by(Source.Section, Symbol, CT.Address) %>%
+  dplyr::mutate(Sub.Group.ID = cur_group_id()) %>%
+  dplyr::arrange(Sub.Group.ID, Call.ID) 
+
+effect_splitting <- effect_splitting %>%
+    ungroup %>%
+    group_by(Group.ID) %>%
+    dplyr::filter(any(Cache.Type.Observed== 'POLY')) %>%
+    group_by(Group.ID, Sub.Group.ID) %>%
+    dplyr::arrange(Group.ID, Call.ID, Sub.Group.ID) %>%
+    ungroup() %>%
+    dplyr::select(Call.ID, Symbol, Source.Section, CT.Address, Cache.Type.Observed, Group.ID, Sub.Group.ID) 
+
+# After many convoluted moves, this table is the one 
+# TODO - This is NOT taking into account different set of receivers, but it should
+effect_splitting <- effect_splitting %>%
+  ungroup() %>%
+  dplyr::arrange(Source.Section, Symbol, Call.ID) %>%
+  group_by(Source.Section, Symbol) %>%
+  dplyr::mutate(prev=dplyr::lag(Cache.Type.Observed)) %>%
+  dplyr::mutate(Splitting.Effect = case_when(is.na(prev) ~ 0,
+                                             prev == 'POLY' & Cache.Type.Observed == 'MONO' ~ 0,
+                                             prev == 'MEGA' & Cache.Type.Observed == 'MONO' ~ 0, 
+                                             prev == 'MEGA' & Cache.Type.Observed == 'POLY' ~ 0,
+                                             prev == Cache.Type.Observed ~ 0,
+                                             prev == 'MONO' & Cache.Type.Observed == 'POLY' ~ 1,
+                                             prev == 'MONO' & Cache.Type.Observed == 'MEGA' ~ 1,
+                                             prev == 'POLY' & Cache.Type.Observed == 'MEGA' ~ 1) )    
+
+# Summarises the splitting behaviour
+# Check each splitting transition
+effect_splitting_summary <- effect_splitting %>%
+  ungroup() %>%
+  group_by(prev, Cache.Type.Observed) %>%
+  dplyr::summarise(Num.Call.Sites = n())
+  
+############################################## MANUAL INSPECTION ############################################## 
+  
+  # to filter out by the number of targets and only keep polymoprhic call-sites 
+  polymorphic_call_sites <- total_w_splitting %>%
+    filter(Num.Receiver.Original >= 2) %>%
+    filter(Num.Receiver.Observed >= 2)
+  
+  # distribution for each call site, pick the most represented receiver by call-site
+  # Add: Weight.Receiver - the weight of each receiver over the total amount of calls for this target {Source.Section, Symbol, CT.Address}
+  # Add: Num.Calls.Per.SS - Number of calls per target{Source.Section, Symbol, CT.Address}
+  distrib_per_call_site <- polymorphic_call_sites %>%
+    group_by(Source.Section, Symbol, CT.Address, Observed.Receiver) %>%
+    dplyr::summarise(n_calls = n()) %>%
+    dplyr::mutate(Weight.Receiver = round(n_calls/sum(n_calls),3)*100) %>%
+    group_by(Source.Section, Symbol, CT.Address) %>%
+    dplyr::arrange(desc(Weight.Receiver), .by_group = TRUE) %>%
+    dplyr::mutate(Num.Calls.Per.SS = sum(n_calls)) 
+  
+  # Selection of most optimizable poly|megamorphic call sites (lots of calls)
+  table_optimizable <- distrib_per_call_site %>%
+    group_by(Source.Section, Symbol) %>%
+    dplyr::arrange(desc(Num.Calls.Per.SS)) %>%
+    slice(1) %>% # keep the most executed receiver per target {Source.Section, Symbol, CT.Address} 
+    ungroup() %>%
+    dplyr::arrange(desc(Num.Calls.Per.SS)) %>%
+    tibble::rowid_to_column(var="Rank")
+  
+  # to get an idea of the most executed call-sites
+  most_executed <- total_w_splitting %>%
+    group_by(Source.Section, Symbol, CT.Address) %>%
+    dplyr::summarise(Num.Calls = n()) %>%
+    slice(1) %>%
+    ungroup %>%
+    dplyr::arrange(desc(Num.Calls), Source.Section, Symbol, CT.Address)
+  
+############################################## PLOT GENERATION - FACET ##############################################
+
+# this generates a faceted plot, each facet being the target adress(es), for a couple {Source.Section, symbol}
+plot_calls <- function(ss, symb) {
+  filtered_data <- polymorphic_call_sites %>% filter(Source.Section == ss & Symbol == symb)
+  p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, color=Observed.Receiver)) + geom_point(size = 0.5, alpha = 0.4) 
+  p <- p + facet_wrap( ~CT.Address, scales = "free", ncol = 3) + xlab("Call ID") + ylab("Target") + theme(legend.position = "none") + ggtitle(paste("Selector: ",filtered_data$Symbol, ", in source: ", filtered_data$Source.Section))
+    p <- p + theme(text = element_text(size=10)) 
+ return (p)
+}
+
+
+f <- function(row) {
+  ss <- row['Source.Section']
+  symbol <- row['Symbol']
+  rank <- row['Rank'] # prefix the plot name by the rank for an easier analysis
+  p_ <- plot_calls(ss, symbol)
+  ss <- gsub("*/","_",ss) # replace the / in the name otherwise the file cannot be created
+  ss <- str_trunc(ss, 25, side='left')
+  ggsave(p_, path=now, filename=paste(rank,ss,symbol,"plot.png", sep="_"), height = 300, width = 500, units="mm")
+}
+
+# create the directory
+now <- format(Sys.time(), "%b%d-%Y_%X")
+now <- paste("results",paste(benchmark_name,now,sep="_"),sep="/")
+dir.create(now)
+
+# 1 line in the table_optimizable corresponds to the most executed observed receiver per target
+# We use the table_optimizable as input to know which target to generate a plot for
+# we apply the plot_calls method to each of these target
+if (nrow(polymorphic_call_sites) != 0) {
+  apply(head(table_optimizable, 30), 1, f) 
+}
+
+# this folder is now hlding the latest ran analysis
+createLink(link="latest", target=now, overwrite=TRUE)
+
+############################################## PLOT GENERATION - SPLITTING LIFETIME ##############################################
+splitting_lifetime_folder <- paste(now,"split_lifetime",sep="/")
+dir.create(splitting_lifetime_folder)
+
+# One plot per call-site, where each y variable is an CT Address
+# this generates a faceted plot, each facet being the target adress(es), for a couple {Source.Section, symbol}
+split_lifetime <- function(df, ss, symb) {
+  filtered_data <- df %>% filter(Source.Section == ss & Symbol == symb) 
+  
+  p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=as.character(CT.Address), color=as.character(CT.Address))) + geom_point(size = 0.5, alpha = 0.4) 
+  p <- p + xlab("Call ID") + ylab("Target") + theme(legend.position = "none") + ggtitle(paste("Split targets lifetime for Selector: ",filtered_data$Symbol, ", in source: ", filtered_data$Source.Section))
+    p <- p + theme(text = element_text(size=10)) 
+ return (p)
+}
+
+f <- function(row) {
+  ss <- row['Source.Section']
+  symbol <- row['Symbol']
+  rank <- row['Rank'] # prefix the plot name by the rank for an easier analysis
+  p_ <- split_lifetime(total_w_splitting, ss, symbol)
+  ss <- gsub("*/","_",ss) # replace the / in the name otherwise the file cannot be created
+  ss <- str_trunc(ss, 25, side='left')
+  ggsave(p_, path=splitting_lifetime_folder, filename=paste(rank,"splitlifetime",ss,symbol,"plot.png", sep="_"), height = 300, width = 500, units="mm")
+}
+
+# 1 line in the table_optimizable corresponds to the most executed observed receiver per target
+# We use the table_optimizable as input to know which target to generate a plot for
+# we apply the plot_calls method to each of these target
+if (nrow(summary_splitting) != 0) {
+  apply(head(summary_splitting, 30), 1, f) 
+}
+
+############################################## PLOT GENERATION - ##############################################
+
+# plot_calls_sub <- function(ss, symb) {
+#   filtered_data <- polymorphic_call_sites %>% filter(Source.Section == ss)
+#   dir_name = paste(now,paste(symb,gsub("*/","_",ss),sep="_"),sep="/")
+#   dir.create(dir_name)
+#   for (addr in unique(filtered_data$CT.Address)) {
+#     filtered_data_addr <- polymorphic_call_sites %>% filter(Source.Section == ss) %>% filter(CT.Address == addr) 
+#     p <- ggplot(data = filtered_data_addr, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, color=Observed.Receiver)) + geom_point(size = 0.5, alpha = 0.4) 
+#     p <- p  + xlab("Call ID") + ylab("Target") + theme(legend.position = "none") + ggtitle(paste("Selector: ",filtered_data_addr$Symbol, ", in source: ", filtered_data_addr$Source.Section))
+#     p <- p + theme(text = element_text(size=15)) 
+#     ss <- gsub("*/","_",ss)
+#     ggsave(p, path=dir_name, filename=paste(addr,ss,"plot.png", sep="_"), height = 300, width = 500, units="mm")
+#   }
+#   return (ss)
+# }
+# 
+# f_subdir <- function(row) {
+#   ss <- row['Source.Section']
+#   symb <- row['Symbol']
+#   rec <- row['Observed.Receiver']
+#   rank <- row['Rank']
+#   o <- plot_calls_sub(ss, symb)
+# }
+# 
+# apply(head(table_optimizable,30), 1, f_subdir) 
+
+############################################## TABLES ###############################################    
+
+## TABLE GENERATION
+# Distribution of call targets
+distrib_cache_size_obs_no_splitting <- xtable(num_target_observed, caption = "Distribution of call-targets (Observed) - Splitting ignored")
+distrib_cache_size_obs_no_splitting <- autoformat(distrib_cache_size_obs_no_splitting, zap = getOption("digits"))
+
+distrib_cache_size_original_no_splitting <- xtable(num_target_original, caption = "Distribution of call-targets (Original) - Splitting ignored")
+distrib_cache_size_original_no_splitting <- autoformat(distrib_cache_size_original_no_splitting, zap = getOption("digits"))
+
+distrib_cache_size_obs_splitting <- xtable(num_target_observed_w_splitting, caption = "Distribution of call-targets (Observed) - Splitting acknowledged")
+distrib_cache_size_obs_splitting <- autoformat(distrib_cache_size_obs_splitting, zap = getOption("digits"))
+
+distrib_cache_size_original_splitting <- xtable(num_target_original_w_splitting, caption = "Distribution of call-targets (Original) - Splitting acknowledged")
+distrib_cache_size_original_splitting <- autoformat(distrib_cache_size_original_splitting, zap = getOption("digits"))
+
+# Target polymorphism
+target_polymorphism <- xtable(summary_cache_change, caption = "Distribution of call-targets (Observed) - Splitting ignored")
+target_polymorphism <- autoformat(target_polymorphism, zap = getOption("digits"))
+
+target_polymorphism_detail <- xtable(summary_cache_change_detail, caption = "Distribution of call-targets (Observed) - Splitting ignored")
+target_polymorphism_detail <- autoformat(target_polymorphism_detail, zap = getOption("digits"))
+
+target_polymorphism_turbo <- xtable(summary_cache_change_detail_turbo, caption = "Distribution of call-targets (Observed) - Splitting ignored")
+target_polymorphism_turbo <- autoformat(target_polymorphism_turbo, zap = getOption("digits"))
+
+# Hottest call-sites
+hottest_mega_ct_table <- xtable(table_optimizable, caption = "Hottest megamorphic call sites")
+hottest_mega_ct_table <- autoformat(hottest_mega_ct_table, zap = getOption("digits"))
+
+hottest_30mega_ct_table <- xtable(head(table_optimizable,30), caption = "Hottest megamorphic call sites")
+hottest_30mega_ct_table <- autoformat(hottest_30mega_ct_table, zap = getOption("digits"))
+
+most_executed <- xtable(head(most_executed  %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='left'), 35), caption = "Most executed call-sites")
+most_executed <- autoformat(most_executed, zap = getOption("digits"))
+
+# Splitting 
+splitting_table <- xtable(head(summary_splitting %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='left'), 30), type = "latex")
+splitting_table <- autoformat(splitting_table, zap = getOption("digits"))
+
+effect_splitting_table <- xtable(effect_splitting_summary, type = "latex")
+effect_splitting_table <- autoformat(effect_splitting_table, zap = getOption("digits"))
+# TODO
+distrib_split_per_ct_table <- xtable(summary_splitting, caption = "Distribution of splits per target")
+distrib_split_per_ct_table <- autoformat(distrib_split_per_ct_table, zap = getOption("digits"))
+
+## TABLE SAVING
+table_folder <- paste(now,"summary_tables",sep="/")
+dir.create(table_folder)
+print(xtable(distrib_cache_size_obs_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"call_target_distrib.tex", sep="/"))
+print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE, file = paste(table_folder,"hottest_megamorphic_call_sites.tex", sep="/"))
+print(xtable(distrib_split_per_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"splits_per_target.tex", sep="/"))
+print(xtable(summary_splitting_detail_turbo %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='left'), type = "latex"), include.rownames=FALSE, tabular.environment="longtable", floating=FALSE,  file = paste(table_folder,"splitting_details.tex", sep="/"))
+
+############################################## VARIBALES GENERATION ##############################################
+
+is.integer0 <- function(x)
+{
+  return (is.integer(x) && length(x) == 0L)
+}
+
+convert_as_integer <- function(df) {
+  result <- 0
+  if (!is.integer0(df$Cumulative)) {
+    result <- head(df$Cumulative,1)
+  } 
+  return(result)
+}
+
+Num.Polymorphic.SplittingObserved <- convert_as_integer(distrib_cache_size_obs_splitting %>% filter(Num.Receiver.Observed >= 2 & Num.Receiver.Observed < 9))
+Num.Polymorphic.NoSplittingObserved <- convert_as_integer(distrib_cache_size_obs_no_splitting %>% filter(Num.Receiver.Observed >= 2 & Num.Receiver.Observed < 9))
+Num.Polymorphic.SplittingOriginal <- convert_as_integer(distrib_cache_size_original_splitting %>% filter(Num.Receiver.Original >= 2 & Num.Receiver.Original < 9))
+Num.Polymorphic.NoSplittingOriginal <- convert_as_integer(distrib_cache_size_original_no_splitting %>% filter(Num.Receiver.Original >= 2 & Num.Receiver.Original < 9))
+
+Num.Megamorphic.SplittingObserved <- convert_as_integer(distrib_cache_size_obs_splitting %>% filter(Num.Receiver.Observed >= 9))
+Num.Megamorphic.NoSplittingObserved <- convert_as_integer(distrib_cache_size_obs_no_splitting %>% filter(Num.Receiver.Observed >= 9))
+Num.Megamorphic.SplittingOriginal <- convert_as_integer(distrib_cache_size_original_splitting %>% filter(Num.Receiver.Original >= 9))
+Num.Megamorphic.NoSplittingOriginal <- convert_as_integer(distrib_cache_size_original_no_splitting %>% filter(Num.Receiver.Original >= 9))
+
+############################################## LATEX COMMAND GENERATION ##############################################
+
+@
+\def\CacheDistribObservedSplitting{%
+<<CacheDistribObservedSplitting, echo=FALSE, results='asis'>>=
+print(xtable(distrib_cache_size_obs_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+  
+\def\CacheDistribOriginalSplitting{%
+<<CacheDistribOriginalSplitting, echo=FALSE, results='asis'>>=
+print(xtable(distrib_cache_size_original_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+
+\def\CacheDistribObservedNoSplitting{%
+<<CacheDistribObservedNoSplitting, echo=FALSE, results='asis'>>=
+print(xtable(distrib_cache_size_obs_no_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+  
+\def\CacheDistribOriginalNoSplitting{%
+<<CacheDistribOriginalNoSplitting, echo=FALSE, results='asis'>>=
+print(xtable(distrib_cache_size_original_no_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+  
+\def\TargetPolymorphism{%
+<<TargetPolymorphism, echo=FALSE, results='asis'>>=
+print(xtable(target_polymorphism, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+  
+\def\TargetPolymorphismDetails{%
+<<TargetPolymorphismDetails, echo=FALSE, results='asis'>>=
+print(xtable(target_polymorphism_detail, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+
+\def\TargetPolymorphismTurbo{%
+<<TargetPolymorphismTurbo, echo=FALSE, results='asis'>>=
+print(xtable(target_polymorphism_turbo, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+
+\def\Splitting{%
+<<Splitting, echo=FALSE, results='asis'>>=
+print(splitting_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
+      @
+  }%
+  
+  \def\EffectSplitting{%
+<<EffectSplitting, echo=FALSE, results='asis'>>=
+print(effect_splitting_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
+      @
+  }%
+
+  \def\HottestMegamorphic{%
+<<HottestMegamorphic, echo=FALSE, results='asis'>>=
+print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE)
+    @
+  }%
+  
+  \def\SuperHottestMegamorphic{%
+<<SuperHottestMegamorphic, echo=FALSE, results='asis'>>=
+print(xtable(hottest_30mega_ct_table, type = "latex"), include.rownames=FALSE)
+    @
+  }%
+  
+  \def\MostExecutedCallSite{%
+<<MostExecutedCallSite, echo=FALSE, results='asis'>>=
+print(xtable(most_executed, type = "latex"), include.rownames=TRUE, tabular.environment="longtable",floating=FALSE)
+      @
+  }%
+  
+\newcommand{\BenchmarkName}{$\Sexpr{benchmark_name}$\xspace}
+\newcommand{\NumIterations}{$\Sexpr{number_iterations}$\xspace}
+\newcommand{\NumInnerIterations}{$\Sexpr{number_inner_iterations}$\xspace}
+\newcommand{\LogFilename}{\Sexpr{filename}\xspace}
+\newcommand{\Hihaho}{\Sexpr{hihaho}\xspace}
+\newcommand{\Yuria}{\Sexpr{yuria}\xspace}
+
+\newcommand{\NumberCallSites}{$\Sexpr{Num.Call.Sites}$\xspace}
+\newcommand{\NumberCallSitesSplitting}{$\Sexpr{Num.Call.Sites.Incl.Splitted}$\xspace}
+\newcommand{\NumberTargetsOriginal}{$\Sexpr{Num.Targets.Original}$\xspace}
+\newcommand{\NumberTargetsObserved}{$\Sexpr{Num.Targets.Observed}$\xspace}
+
+\newcommand{\NumberCalls}{$\Sexpr{nrow(data)}$\xspace}
+\newcommand{\NumOfSplittedTargets}{$\Sexpr{nrow(summary_splitting)}$\xspace}
+
+\newcommand{\NumPolymorphicSplittingObserved}{$\Sexpr{Num.Polymorphic.SplittingObserved}$\xspace}
+\newcommand{\NumPolymorphicNoSplittingObserved}{$\Sexpr{Num.Polymorphic.NoSplittingObserved}$\xspace}
+\newcommand{\NumPolymorphicSplittingOriginal}{$\Sexpr{Num.Polymorphic.SplittingOriginal}$\xspace}
+\newcommand{\NumPolymorphicNoSplittingOriginal}{$\Sexpr{Num.Polymorphic.NoSplittingOriginal}$\xspace}
+
+\newcommand{\NumMegamorphicSplittingObserved}{$\Sexpr{Num.Megamorphic.SplittingObserved}$\xspace}
+\newcommand{\NumMegamorphicNoSplittingObserved}{$\Sexpr{Num.Megamorphic.NoSplittingObserved}$\xspace}
+\newcommand{\NumMegamorphicSplittingOriginal}{$\Sexpr{Num.Megamorphic.SplittingOriginal}$\xspace}
+\newcommand{\NumMegamorphicNoSplittingOriginal}{$\Sexpr{Num.Megamorphic.NoSplittingOriginal}$\xspace}
+
+\newcommand{\HasChangedStatus}{$\Sexpr{Has.Changed.Status}$\xspace}
+\newcommand{\HasExperiencedTP}{$\Sexpr{Has.Experienced.TP}$\xspace}
+
+
+
+
+
+
