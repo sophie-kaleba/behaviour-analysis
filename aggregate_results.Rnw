@@ -1,0 +1,27 @@
+<<knitr-load, echo=FALSE, include=FALSE>>=
+if (Sys.getenv("RSTUDIO") == "1") {
+    setwd("/home/sopi/Documents/Side_projects/behaviour-analysis/")
+} else {
+   opts_chunk$set(
+    fig.path="./figure/",
+    fig.keep='all',
+    dev=c('tikz'), #dev='pdf',c('tikz', 'svg'),
+    dev.args=list(pointsize=8, timestamp = FALSE),
+    echo=FALSE,
+    external=FALSE,
+    tidy=FALSE)
+
+  ## Make sure that TikZDevice is used for measuring size of latex labels
+  options(device = function(...) tikzDevice::tikz(tempfile(), ...))
+}
+
+source("./scripts/libraries.R", chdir=TRUE)
+
+data <- load_all_data("/home/sopi/Documents/Side_projects/behaviour-analysis/results/parsed_files/methods", FALSE)
+
+# Table summarizing the amount of call sites being mono, poly, mega
+total_w_splitting <- add_number_receivers(data, c(Call.Site.Target, "Benchmark"))
+num_target_observed_w_splitting <- compute_num_target_details(total_w_splitting, Call.Site.Target,  "Observed.Receiver", benchmark="Benchmark")
+
+cache_status_sites <- create_aggregate_table(num_target_observed_w_splitting, c("Benchmark", "Num.Receiver", "Num.Call.Sites"),"Num.Receiver", "Num.Call.Sites")
+cache_status_calls <- head(create_aggregate_table(num_target_observed_w_splitting, c("Benchmark", "Num.Receiver", "Frequency"),"Num.Receiver", "Frequency"), -1)

@@ -14,16 +14,32 @@ load_and_install_if_necessary("ggplot2")
 load_and_install_if_necessary("psych")   # uses only geometric.mean
 load_and_install_if_necessary("tables")
 load_and_install_if_necessary("reshape2")
-load_and_install_if_necessary("assertthat")
+#load_and_install_if_necessary("assertthat")
 load_and_install_if_necessary("tikzDevice")
 load_and_install_if_necessary("scales")
 load_and_install_if_necessary("memoise")
 load_and_install_if_necessary("RColorBrewer")
 load_and_install_if_necessary("ggrepel")   # make sure labels don't overlap
+load_and_install_if_necessary("forcats")
+load_and_install_if_necessary("data.table")
+load_and_install_if_necessary("stringr")
+load_and_install_if_necessary("xtable")
+load_and_install_if_necessary("htmlTable")
+load_and_install_if_necessary("testit")
+load_and_install_if_necessary("assertr")
+load_and_install_if_necessary("R.utils")
+load_and_install_if_necessary("networkD3")
+load_and_install_if_necessary("janitor")
+
 
 source("data-processing.R")
 source("plots.R")
 source("colors.R")
+source("paper.R")
+source("phase-data-processing.R")
+source("machine_specs.R")
+source("behaviour-processing.R")
+source("target-polymorphism.R")
 
 # avoid scientific notation for numbers, it's more readable to me
 options(scipen=999)

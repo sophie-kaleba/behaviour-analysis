@@ -1,13 +1,16 @@
 Call.Site.Target <- c("Source.Section", "Symbol", "CT.Address")
 Call.Site <- c("Source.Section", "Symbol")
 
-load_all_data <- function (folder, data_file_prefix = "") { 
+load_all_data <- function (folder, keep_blocks) { 
   result <- NULL
-  files <- sort(list.files(folder, paste0(data_file_prefix, "[0-9]+")))
+  files <- sort(list.files(folder))
   
   for (f in files) {
+    print(f)
     data <- load_data_file(paste(folder, f, sep = "/"))
+    benchmark_name <- gsub("^(.*?)\\_","",f)
     data$Benchmark <- benchmark_name
+    data <- clean_data_file(data, keep_blocks)
     result <- rbind(result, data)
   }
   return(result)
@@ -22,6 +25,24 @@ count_things <- function(df, grouped) {
     n_distinct(df %>% dplyr::select(all_of(grouped))) 
 }
 
+clean_data_file <- function(df_p, keep_blocks) {
+  if (keep_blocks) {
+    df <- df_p %>%
+      dplyr::filter(Builtin. =="PROC" | Builtin. =="LAMBDA" | Builtin. =="block" ) 
+  }
+  else {
+    df <- df_p %>%
+       dplyr::filter(!(Builtin. =="PROC" | Builtin. =="LAMBDA" | Builtin. =="block")) 
+  }
+
+  df <- df %>% 
+    dplyr::filter(!(Source.Section=="")) %>% 
+    tibble::rowid_to_column(var="Call.ID") %>%
+    mutate(across(where(is.character), str_trim)) #trim all columns
+  return (df)
+}
+
+
 add_number_receivers <- function(df, call_site) {
     df %>%
     group_by_at(call_site) %>%
@@ -34,17 +55,45 @@ add_number_receivers <- function(df, call_site) {
 # Add: Num.Call.Sites (the number of call-sites associated with a given number of receivers), Cumulative
 #' @param num_receiver_column, whether we consider the observed or the original number of receivers  
 #' @param ct_address, whether we consider splitting 
-compute_num_target_details <- function(df_p, call_site_type, receiver_type) {
+compute_num_target_details <- function(df_p, call_site_type, receiver_type, benchmark=NULL) {
   df <- df_p %>%
-    select(c(call_site_type, !! sym(receiver_type), Call.ID)) %>% 
-    dplyr::group_by_at(call_site_type) %>%
+    select(c(all_of(call_site_type), !! sym(receiver_type), Call.ID), !! sym(benchmark)) %>% 
+    dplyr::group_by_at(c(all_of(call_site_type), benchmark)) %>%
     dplyr::summarise(Num.Receiver = dplyr::n_distinct(!! sym(receiver_type)), Num.Calls = n_distinct(Call.ID)) %>%
-    group_by(Num.Receiver)  %>%
+    group_by(Num.Receiver, !! sym(benchmark))  %>%
     dplyr::summarise(Num.Call.Sites = n(), Num.Calls=sum(Num.Calls)) %>%
-    dplyr::mutate(Frequency = round(Num.Calls/nrow(df_p),7)*100) %>%
+    group_by(!! sym(benchmark)) %>%
     dplyr::mutate(Cumulative.Call.Sites = rev(cumsum(rev(Num.Call.Sites)))) %>%
     dplyr::mutate(Cumulative.Calls = rev(cumsum(rev(Num.Calls)))) %>%
+    dplyr::mutate(Frequency = round(Num.Calls/sum(Num.Calls),7)*100)  %>%
     dplyr::mutate(Cumulative.Freq = rev(cumsum(rev(Frequency))))
   return(df)
 }
+
+add_lookup_status_per_call <- function(df_p) {
+  df <- df_p %>%
+    ungroup() %>%
+    group_by_at(Call.Site.Target) %>%
+    dplyr::mutate(Cache.Type.Original = case_when(Num.Receiver.Original == 1 ~ "MONO",
+                                        Num.Receiver.Original > 1 & Num.Receiver.Original <= 8 ~ "POLY",
+                                        Num.Receiver.Original > 8 ~ "MEGA"))%>%
+    dplyr::mutate(Cache.Type.Observed = case_when(Num.Receiver.Observed == 1 ~ "MONO",
+                                        Num.Receiver.Observed > 1 & Num.Receiver.Observed <= 8 ~ "POLY",
+                                        Num.Receiver.Observed > 8 ~ "MEGA")) 
+  return(df)
+}
+
+create_aggregate_table <- function(df_p, col_selection, key, value) {
+  df <- df_p %>% 
+    select_at(all_of(col_selection)) %>%
+    dplyr::mutate(across(is.numeric, round, digits=1)) %>%
+    tidyr::spread(key, value) %>%
+    replace(is.na(.), 0) %>%
+    janitor::adorn_totals("row") 
+  return(df)
+}
+
+
+
+
 

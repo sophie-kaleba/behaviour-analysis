@@ -41,12 +41,9 @@ data <- load_data_file("./results/AsciidoctorConvertSmall_Feb25-2022_13:32:07/pa
 
 ############################################## MAIN TABLE ############################################## 
 
+
 # remove any invalid data (extra logging info ignored by parsing)
-data <- data %>% 
-    dplyr::filter(!(Source.Section=="")) %>% 
-    dplyr::filter(!(Builtin. =="PROC" | Builtin. =="LAMBDA" )) %>% 
-    tibble::rowid_to_column(var="Call.ID") %>%
-    dplyr::mutate(Symbol = str_trim(Symbol, side = "both"))
+data <- clean_data_file(data, FALSE)
 
 # Add info on the number of call targets per call-site (taking splittng into account)
 # Add: Num.Receiver.Observed, Num.Receiver.Original
@@ -77,35 +74,18 @@ testit::assert("Both tables should have the same number of call-sites", first(nu
 testit::assert("... And it should match the total number of call-sites", first(num_target_original_w_splitting$Cumulative.Call.Sites) == Num.Call.Sites.Incl.Splitted)
 
 # Add the cache type for each call-site
-total_w_splitting <- total_w_splitting %>%
-  ungroup() %>%
-  group_by_at(Call.Site.Target) %>%
-  dplyr::mutate(Cache.Type.Original = case_when(Num.Receiver.Original == 1 ~ "MONO",
-                                       Num.Receiver.Original > 1 & Num.Receiver.Original <= 8 ~ "POLY",
-                                       Num.Receiver.Original > 8 ~ "MEGA"))%>%
-  dplyr::mutate(Cache.Type.Observed = case_when(Num.Receiver.Observed == 1 ~ "MONO",
-                                       Num.Receiver.Observed > 1 & Num.Receiver.Observed <= 8 ~ "POLY",
-                                       Num.Receiver.Observed > 8 ~ "MEGA")) 
-
+total_w_splitting <- add_lookup_status_per_call(total_w_splitting)
 
 ############################################## TARGET POLYMORPHISM ##############################################
 
 # Add: Target.Polymorphism
 total_w_splitting <- total_w_splitting %>%
-  dplyr::mutate(Target.Polymorphism = (Observed.Receiver != Original.Receiver))
-
-# Add: Has.Changed.Status, Has.Changed.Status.aggr (the aggregated version, ie the final status of this call-site)
-total_w_splitting <- total_w_splitting %>%
-  group_by(Source.Section, Symbol, CT.Address) %>%
+  dplyr::mutate(Target.Polymorphism = (Observed.Receiver != Original.Receiver)) %>%
   dplyr::mutate(Has.Changed.Status = (Cache.Type.Observed != Cache.Type.Original)) %>%
-  dplyr::mutate(Has.Changed.Status.aggr = any(str_detect(Has.Changed.Status, 'TRUE'))) %>%
-  dplyr::mutate(Target.Polymorphism.aggr = any(str_detect(Target.Polymorphism, 'TRUE'))) %>%
-  dplyr::mutate(Invalid.Status = case_when(Cache.Type.Original == "MONO" & Num.Targets.Observed == "POLY" ~ 'TRUE',
-                                           Cache.Type.Original == "MONO" & Num.Targets.Observed == "MEGA" ~ 'TRUE',
-                                           Cache.Type.Original == "POLY" & Num.Targets.Observed == "MEGA" ~ 'TRUE')) 
+  check_invalid_transition()
 
-assert("Changes of cache status are only allowed from high degree of polymoprhism to low degree of polymoprhism", nrow(total_w_splitting %>%  dplyr::filter(grepl('TRUE', Invalid.Status))) == 0)
-total_w_splitting <- dplyr::select(total_w_splitting, -Invalid.Status) #We can safely drop this column then
+summary_tp <- has_changed_status(total_w_splitting)
+summary_tp <- merge(has_experienced_tp(total_w_splitting), summary_tp, by = "Value")
 
 # How many source sections (call-sites) are changing LC status due to TP?
 Has.Experienced.TP <- nrow(total_w_splitting %>% group_by(Source.Section, Symbol, CT.Address) %>% slice(1) %>% filter(Target.Polymorphism.aggr == TRUE)) 
