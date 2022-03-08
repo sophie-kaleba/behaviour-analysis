@@ -40,6 +40,7 @@ source("phase-data-processing.R")
 source("machine_specs.R")
 source("behaviour-processing.R")
 source("target-polymorphism.R")
+source("splitting.R")
 
 # avoid scientific notation for numbers, it's more readable to me
 options(scipen=999)

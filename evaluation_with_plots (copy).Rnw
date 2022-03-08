@@ -93,29 +93,9 @@ Has.Changed.Status <- nrow(total_w_splitting %>% group_by(Source.Section, Symbol
 assert("Only call-sites having experienced target polymorphism can experience a change in the status of their cache", Has.Experienced.TP >= Has.Changed.Status)
 
 # give an overview of the evolution of caches after resolving target polymorphism
-summary_cache_change <- total_w_splitting %>%
-      dplyr::select(-Has.Changed.Status, -Target.Polymorphism) %>%
-      group_by(Source.Section, Symbol, CT.Address) %>% 
-      slice(1) %>% 
-      filter(Has.Changed.Status.aggr == TRUE)  %>%
-      group_by(Cache.Type.Original, Cache.Type.Observed) %>%
-      dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol, CT.Address)) %>%
-      select(Cache.Type.Original, Cache.Type.Observed, Num.Call.Sites) %>%
-      slice(1) 
-
-# give an overview of the evolution of caches after resolving target polymorphism
 # at the granularity of cache size
-summary_cache_change_detail <- total_w_splitting %>%
-      dplyr::select(-Has.Changed.Status, -Target.Polymorphism) %>%
-      group_by(Source.Section, Symbol, CT.Address) %>% 
-      filter(Has.Changed.Status.aggr == TRUE)  %>%
-      group_by(Num.Receiver.Original, Num.Receiver.Observed) %>%
-      dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol, CT.Address)) %>%
-      select(Num.Receiver.Original, Num.Receiver.Observed, Num.Call.Sites) %>%
-      slice(1) %>%
-      mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites))))
-      #verify(first(Cumulative) == Has.Changed.Status) # the cumulative amount of TP call-site should be equal to Has.Changed.Status TODO-CHECK ##################################################################
-
+summary_cache_change_detail <- build_detailed_summary_tp(total_w_splitting)
+  
 # give an overview of the evolution of caches after resolving target polymorphism
 # at the granularity of cache size
 # and provide details about the concerned call-sites
@@ -128,30 +108,10 @@ summary_cache_change_detail_turbo <- total_w_splitting %>%
       
 ############################################## SPLITTING ##############################################    
 
-# Provide a list of splitted-call sites
-# Add: Times.Splitted, the number of times a call-site has been splitted
-generate_splitting_summary <- function(data, ...) {
-  df <- data %>%
-    select(...) %>%
-    group_by(Source.Section, Symbol) %>%
-    dplyr::mutate(Times.splitted = n_distinct(CT.Address) - 1) %>%  # -1 otherwise we count the call-sites that have one call target (ie not splitted)
-    dplyr::filter(Times.splitted > 0) %>%
-    dplyr::mutate(Num.Calls = n()) %>%
-    dplyr::mutate(Frequency = round(Num.Calls/nrow(data),3)*100)
-  return(df)
-}
 
-summary_splitting <- generate_splitting_summary(total_w_splitting, c("Source.Section", "Symbol", "CT.Address")) %>%
-  select(-CT.Address) %>%
-  slice(1) %>%
+summary_splitting <- generate_splitting_summary(total_w_splitting, c(Call.Site.Target, "Call.ID", "Observed.Receiver")) %>%
   dplyr::arrange(desc(Frequency)) %>%
   tibble::rowid_to_column(var="Rank")
-
-col <- c("Source.Section", "Symbol", "CT.Address", "Original.Receiver", "Observed.Receiver", "Num.Receiver.Observed", "Num.Receiver.Original")
-summary_splitting_detail_turbo <- generate_splitting_summary(total_w_splitting, all_of(col)) %>%
-  group_by(Source.Section, Symbol, CT.Address) %>%
-  slice(1) %>%
-  dplyr::arrange(desc(Times.splitted)) 
 
 # Was splitting useful? State of lookup cache after splitting
 effect_splitting <- total_w_splitting %>%

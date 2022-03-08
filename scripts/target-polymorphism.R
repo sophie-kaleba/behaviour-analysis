@@ -13,7 +13,7 @@ has_changed_status <- function(df_p, benchmark=NULL) {
   df <- df_p %>%
     group_by_at(c("Has.Changed.Status", benchmark)) %>%
     dplyr::rename(Value = Has.Changed.Status) %>%
-    dplyr::summarise(Has.Changed.Status = n_distinct(Symbol, CT.Address, Source.Section)) 
+    dplyr::summarise(Has.Changed.Status.Sites = n_distinct(Symbol, CT.Address, Source.Section), Has.Changed.Status.Calls = n_distinct(Call.ID)) 
   return(df)
 }
 
@@ -21,6 +21,22 @@ has_experienced_tp <- function(df_p, benchmark=NULL) {
   df <- df_p %>%
     group_by_at(c("Target.Polymorphism", benchmark)) %>%
     dplyr::rename(Value = Target.Polymorphism) %>%
-    dplyr::summarise(Target.Polymorphism = n_distinct(Symbol, CT.Address, Source.Section))
+    dplyr::summarise(Target.Polymorphism.Sites = n_distinct(Symbol, CT.Address, Source.Section), Target.Polymorphism.Calls = n_distinct(Call.ID))
   return(df)
 }
+
+build_detailed_summary_tp <- function(df_p, benchmark=NULL) {
+    df <- df_p %>%
+      filter(Has.Changed.Status == TRUE)  %>%
+      group_by_at(c(Call.Site.Target, "Num.Receiver.Original", "Num.Receiver.Observed")) %>% 
+      dplyr::summarise("Num.Call.Sites" = n_distinct(Source.Section, Symbol, CT.Address),  Num.Calls = n_distinct(Call.ID)) %>%
+      group_by(Num.Receiver.Original, Num.Receiver.Observed) %>%
+      dplyr::summarise("Num.Call.Sites" = n_distinct(Source.Section, Symbol, CT.Address), Num.Calls = sum(Num.Calls)) %>%
+      group_by_at(benchmark) %>%
+      dplyr::mutate(Cumulative.Call.Sites = rev(cumsum(rev(Num.Call.Sites)))) %>%
+      dplyr::mutate(Cumulative.Calls = rev(cumsum(rev(Num.Calls)))) %>%
+      dplyr::mutate(Frequency = round(Num.Calls/sum(Num.Calls),7)*100)  %>%
+      dplyr::mutate(Cumulative.Freq = rev(cumsum(rev(Frequency))))
+    return(df)    
+} 
+
