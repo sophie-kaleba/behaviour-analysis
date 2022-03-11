@@ -87,31 +87,61 @@ total_w_splitting <- total_w_splitting %>%
 summary_tp <- has_changed_status(total_w_splitting)
 summary_tp <- merge(has_experienced_tp(total_w_splitting), summary_tp, by = "Value")
 
-# How many source sections (call-sites) are changing LC status due to TP?
-Has.Experienced.TP <- nrow(total_w_splitting %>% group_by(Source.Section, Symbol, CT.Address) %>% slice(1) %>% filter(Target.Polymorphism.aggr == TRUE)) 
-Has.Changed.Status <- nrow(total_w_splitting %>% group_by(Source.Section, Symbol, CT.Address) %>% slice(1) %>% filter(Has.Changed.Status.aggr == TRUE)) 
-assert("Only call-sites having experienced target polymorphism can experience a change in the status of their cache", Has.Experienced.TP >= Has.Changed.Status)
-
 # give an overview of the evolution of caches after resolving target polymorphism
 # at the granularity of cache size
 summary_cache_change_detail <- build_detailed_summary_tp(total_w_splitting)
+write.csv(total_w_splitting,"./total_w_splitting.csv", row.names = FALSE)
   
-# give an overview of the evolution of caches after resolving target polymorphism
-# at the granularity of cache size
-# and provide details about the concerned call-sites
-summary_cache_change_detail_turbo <- total_w_splitting %>%
-      dplyr::select(-Has.Changed.Status, -Target.Polymorphism) %>%
-      group_by(Source.Section, Symbol, CT.Address) %>% 
-      filter(Has.Changed.Status.aggr == TRUE)  %>%
-      select(Num.Receiver.Original, Num.Receiver.Observed, Symbol, Source.Section, CT.Address, Original.Receiver, Observed.Receiver) %>%
-      dplyr::arrange(Num.Receiver.Original, Num.Receiver.Observed)
-      
 ############################################## SPLITTING ##############################################    
+test_data <- read_test_data("./total_w_splitting.csv")
+test_data <- test_data %>% dplyr::select(Call.ID, Symbol, Source.Section, CT.Address, Observed.Receiver, Benchmark, Num.Receiver.Observed, Cache.Type.Observed, Times.splitted, Num.Calls)
 
+# per call-site
+test <- test_data %>%
+  group_by_at(Call.Site) %>%
+  dplyr::mutate(Times.splitted = n_distinct(CT.Address) - 1, Num.Calls = n_distinct(Call.ID))
+write.csv(test,"./test_splitting.csv", row.names = FALSE)
 
+dfjgkdfgkd <- total_w_splitting %>%
+    group_by_at(Call.Site) %>%
+    dplyr::mutate(Times.splitted = n_distinct(CT.Address) - 1, Num.Calls = n_distinct(Call.ID))
+dfjgkdfgkd <- dfjgkdfgkd %>% dplyr::select(Call.ID, Symbol, Source.Section, CT.Address, Observed.Receiver, Benchmark, Num.Receiver.Observed, Cache.Type.Observed, Times.splitted, Num.Calls)
+write.csv(dfjgkdfgkd,"./real_data.csv", row.names = FALSE)
+
+row_names <- c("Source.Section", "Symbol", "Start.ID", "End.ID", "Start.State", "End.State", "Start.Cache.Size", "End.Cache.Size", "Union.Size", "Intersect.Size", "Benchmark")
+real_data <- read.csv("./splitting-analysis/test_output.csv", header = FALSE, sep = ",", row.names=NULL, col.names=row_names)
+
+rd <- real_data %>%
+  dplyr::mutate(Transition.Type = case_when( Start.State == 'POLYMORPHIC' & End.State == 'POLYMORPHIC' & Intersect.Size == Union.Size ~ "Same",
+                                             Start.State == 'MONOMORPHIC' & End.State == 'MONOMORPHIC' & Intersect.Size == Union.Size ~ "Same",
+                                             Start.State == 'MEGAMORPHIC' & End.State == 'MEGAMORPHIC' & Intersect.Size == Union.Size ~ "Same",
+                                             TRUE ~ "Different")) %>%
+  group_by(Start.State, End.State, Transition.Type) %>%
+  dplyr::summarise(Num.Transitions = n())
+  
+
+# keep the receiver so it is easier to compare with Truffle's splitting summary
 summary_splitting <- generate_splitting_summary(total_w_splitting, c(Call.Site.Target, "Call.ID", "Observed.Receiver")) %>%
   dplyr::arrange(desc(Frequency)) %>%
   tibble::rowid_to_column(var="Rank")
+
+dfjgkdfgkd <- total_w_splitting %>%
+    group_by_at(Call.Site) %>%
+    dplyr::mutate(Times.splitted = n_distinct(CT.Address) - 1, Num.Calls = n_distinct(Call.ID)) %>%
+    dplyr::filter(Times.splitted > 0) %>%
+    dplyr::arrange(Call.ID, .by_group = TRUE) %>%
+    group_by(Source.Section, Symbol) %>%
+    dplyr::mutate(Group.ID = cur_group_id()) %>%
+    group_by(Source.Section, Symbol, CT.Address) %>%
+    dplyr::mutate(Sub.Group.ID = cur_group_id()) %>%
+    dplyr::arrange(Sub.Group.ID, Call.ID) %>%
+    select(Call.ID, Source.Section, Symbol, CT.Address, Times.splitted, Cache.Type.Observed, Group.ID, Sub.Group.ID) %>%
+    group_by(Group.ID, Sub.Group.ID) %>%
+    dplyr::arrange(Group.ID, Call.ID, Sub.Group.ID) %>%
+    filter(row_number() == 1  ) 
+    
+    
+
 
 # Was splitting useful? State of lookup cache after splitting
 effect_splitting <- total_w_splitting %>%

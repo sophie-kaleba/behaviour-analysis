@@ -6,10 +6,7 @@ load_all_data <- function (folder, keep_blocks) {
   files <- sort(list.files(folder))
   
   for (f in files) {
-    print(f)
     data <- load_data_file(paste(folder, f, sep = "/"))
-    benchmark_name <- gsub("^(.*?)\\_","",f)
-    data$Benchmark <- benchmark_name
     data <- clean_data_file(data, keep_blocks)
     result <- rbind(result, data)
   }
@@ -55,14 +52,14 @@ add_number_receivers <- function(df, call_site) {
 # Add: Num.Call.Sites (the number of call-sites associated with a given number of receivers), Cumulative
 #' @param num_receiver_column, whether we consider the observed or the original number of receivers  
 #' @param ct_address, whether we consider splitting 
-compute_num_target_details <- function(df_p, call_site_type, receiver_type, benchmark=NULL) {
+compute_num_target_details <- function(df_p, call_site_type, receiver_type) {
   df <- df_p %>%
-    select(c(all_of(call_site_type), !! sym(receiver_type), Call.ID), !! sym(benchmark)) %>% 
-    dplyr::group_by_at(c(all_of(call_site_type), benchmark)) %>%
+    select(c(all_of(call_site_type), !! sym(receiver_type), Call.ID), "Benchmark") %>% 
+    dplyr::group_by_at(c(all_of(call_site_type), "Benchmark")) %>%
     dplyr::summarise(Num.Receiver = dplyr::n_distinct(!! sym(receiver_type)), Num.Calls = n_distinct(Call.ID)) %>%
-    group_by(Num.Receiver, !! sym(benchmark))  %>%
+    group_by(Num.Receiver, Benchmark)  %>%
     dplyr::summarise(Num.Call.Sites = n(), Num.Calls=sum(Num.Calls)) %>%
-    group_by(!! sym(benchmark)) %>%
+    group_by(Benchmark) %>%
     dplyr::mutate(Cumulative.Call.Sites = rev(cumsum(rev(Num.Call.Sites)))) %>%
     dplyr::mutate(Cumulative.Calls = rev(cumsum(rev(Num.Calls)))) %>%
     dplyr::mutate(Frequency = round(Num.Calls/sum(Num.Calls),7)*100)  %>%

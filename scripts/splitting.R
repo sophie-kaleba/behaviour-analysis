@@ -11,8 +11,11 @@ generate_splitting_summary <- function(df_p, chosen_cols, benchmark=NULL) {
   return(df)
 }
 
-summary_splitting_transition <- function() {
-  
+summary_splitting_transition <- function(df_p) {
+  df <- df_p %>%
+    group_by_at(Call.Site) %>%
+    dplyr::summarise(Times.splitted = n_distinct(CT.Address) - 1, Num.Calls = n_distinct(Call.ID)) 
+    
 }
 
 

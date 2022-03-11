@@ -46,6 +46,14 @@ read_splitting_profiling_file <- function(filename) {
   row_names <- c("Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver")
 
   data <- read.csv(filename, header = FALSE, sep = "\t", row.names=NULL, col.names=row_names)
+  
+  benchmark_name <- str_match(filename, "parsed\\_(.*?)\\.mylog")[2]
+  data$Benchmark <- benchmark_name
+  return(data)
+}
+
+read_test_data <- function(filename) {
+  data <- read.csv(filename, header = TRUE, sep = ",")
   return(data)
 }
 
