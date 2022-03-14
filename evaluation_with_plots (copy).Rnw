@@ -93,9 +93,23 @@ summary_cache_change_detail <- build_detailed_summary_tp(total_w_splitting)
 write.csv(total_w_splitting,"./total_w_splitting.csv", row.names = FALSE)
   
 ############################################## SPLITTING ##############################################    
+summary_splitting <- generate_splitting_summary(total_w_splitting, c(Call.Site.Target, "Call.ID", "Observed.Receiver")) %>%
+  dplyr::arrange(desc(Frequency)) %>%
+  tibble::rowid_to_column(var="Rank")
+
+num_calls_splitted <- total_w_splitting %>%
+  group_by_at(Call.Site) %>%
+  dplyr::mutate(Times.Splitted = n_distinct(CT.Address) - 1) %>%
+  filter(Times.Splitted > 0)
+
+Num.Splitted.Call.Sites <- count_things(num_calls_splitted, Call.Site)
 
 transition_data <- analyse_splitting_transitions(total_w_splitting, benchmark_name)
-splitting_transition_summary <- summarise_transition(transition_data)
+
+Number.Splits <- nrow(transition_data)
+splitting_transition_summary_sites <- summarise_transition_sites(transition_data)
+# get frequency according to number of splits
+splitting_transition_summary_frequency <- summarise_transition_frequency(transition_data, Number.Splits)
   
 ############################################## MANUAL INSPECTION ############################################## 
   
@@ -178,9 +192,15 @@ dir.create(splitting_lifetime_folder)
 split_lifetime <- function(df, ss, symb) {
   filtered_data <- df %>% filter(Source.Section == ss & Symbol == symb) 
   
-  p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=as.character(CT.Address), color=as.character(CT.Address))) + geom_point(size = 0.5, alpha = 0.4) 
-  p <- p + xlab("Call ID") + ylab("Target") + theme(legend.position = "none") + ggtitle(paste("Split targets lifetime for Selector: ",filtered_data$Symbol, ", in source: ", filtered_data$Source.Section))
+  p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=as.character(CT.Address), color=Cache.Type.Observed)) + geom_point(size = 0.5, alpha = 0.4) 
+  p <- p + xlab("Call ID") + ylab("Target") + ggtitle(paste("Split targets lifetime for Selector: ",filtered_data$Symbol, ", in source: ", filtered_data$Source.Section))
     p <- p + theme(text = element_text(size=10)) 
+    p <- p + theme(
+    legend.position = c(.95, .95),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+    legend.margin = margin(6, 6, 6, 6)
+    )
  return (p)
 }
 
