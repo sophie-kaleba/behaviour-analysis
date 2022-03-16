@@ -65,18 +65,27 @@ Some call-targets have been splitted several times; the following table list all
 
 \newpage
 
+\begin{landscape}
 \begin{figure}[h]
   \centering
   \Splitting
   \caption{
     30th most splitted targets}
 \end{figure}
+\end{landscape}
 
 \begin{figure}[h]
   \centering
-  \EffectSplitting
+  \EffectSplittingSites
   \caption{
-    Effect of splitting on lookup-cache status}
+    Effect of splitting on lookup-cache status (number of sites impacted)}
+\end{figure}
+
+\begin{figure}[h]
+  \centering
+  \EffectSplittingFrequency
+  \caption{
+    Effect of splitting on lookup-cache status (on all splits)}
 \end{figure}
 
 
@@ -84,7 +93,7 @@ Some call-targets have been splitted several times; the following table list all
 
 \subsubsection{Receiver polymorphism}
 
-\begin{figure}[h]
+\begin{figure}[h!]
   \centering
   \CacheDistribObservedSplitting
   \caption{
@@ -92,7 +101,7 @@ Some call-targets have been splitted several times; the following table list all
 \end{figure}
 
 
-\begin{figure}[h]
+\begin{figure}[h!]
   \centering
   \CacheDistribOriginalSplitting
   \caption{
@@ -102,19 +111,21 @@ Some call-targets have been splitted several times; the following table list all
 
 \subsubsection{Target polymorphism}
 
-\begin{figure}[h]
+\begin{figure}[h!]
   \centering
   \TargetPolymorphism
   \caption{
     Impact of optimization regarding target polymorphism}
 \end{figure}
 
+\begin{landscape}
 \begin{figure}[h]
   \centering
   \TargetPolymorphismDetails
   \caption{
     Detailed impact with the evolution of cache entries}
 \end{figure}
+\end{landscape}
 
 
 %\subsection{Type of call-sites as per ruby semantics}
@@ -147,12 +158,6 @@ A manual inspection is then required to identify potential phases based on the l
 \end{landscape}
 
 \appendix
-
-\section{Splitting}
-
-This table lists all the splits that were performed
-
-\EffectSplitting
 
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{sample-base}

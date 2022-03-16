@@ -31,6 +31,8 @@ reorganize:
 	mv $(PARSED_INPUT).mylog latest/$(PARSED_INPUT).mylog
 	mv $(PARSED_INPUT).pdf latest/$(PARSED_INPUT).pdf
 	mv gen-eval.tex latest/gen-eval.tex
+	mv ${benchmark_name}_splitting_data.csv latest/${benchmark_name}_splitting_data.csv
+	mv out_${benchmark_name}_splitting_data.csv latest/out_${benchmark_name}_splitting_data.csv
 
 clean:
 	rm *.aux

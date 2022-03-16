@@ -16,31 +16,9 @@ if (Sys.getenv("RSTUDIO") == "1") {
   options(device = function(...) tikzDevice::tikz(tempfile(), ...))
 }
 
-#install.packages("reshape2", repos='http://cran.us.r-project.org')
-#install.packages("htmlTable", repos='http://cran.us.r-project.org')
-#install.packages("networkD3", repos='http://cran.us.r-project.org')
-#install.packages("testit", repos='http://cran.us.r-project.org')
-#install.packages("forcats", repos='http://cran.us.r-project.org')
-library(forcats)
-library(reshape2)
-library(ggplot2)
-library(data.table)
-library(dplyr)
-library(stringr)
-library(xtable)
-library(htmlTable)
-library(networkD3)
-library(R.utils)
-library(assertr)
-library(testit)
-
-
 source("./scripts/libraries.R", chdir=TRUE)
-source("./scripts/paper.R", chdir=TRUE)
-source("./scripts/phase-data-processing.R", chdir=TRUE)
-source("./scripts/machine_specs.R", chdir=TRUE)
 
-data <- read_splitting_profiling_file(filename)
+data <- load_data_file(filename)
 
 ############################################## READ-ME ##############################################
 # INVARIANTS TO BE CHECKED
@@ -64,243 +42,72 @@ data <- read_splitting_profiling_file(filename)
 ############################################## MAIN TABLE ############################################## 
 
 # remove any invalid data (extra logging info ignored by parsing)
-data <- data %>% 
-    dplyr::filter(!(Source.Section=="")) %>% 
-    dplyr::filter(!(Builtin.=="block")) %>% 
-    tibble::rowid_to_column(var="Call.ID") %>%
-    dplyr::mutate(Symbol = str_trim(Symbol, side = "both"))
+data <- clean_data_file(data, FALSE)
 
 # Add info on the number of call targets per call-site (taking splittng into account)
 # Add: Num.Receiver.Observed, Num.Receiver.Original
-total_w_splitting <- data %>%
-  group_by(Source.Section, Symbol, CT.Address) %>%
-  dplyr::mutate(Num.Receiver.Observed = n_distinct(Observed.Receiver)) %>%
-  dplyr::mutate(Num.Receiver.Original = n_distinct(Original.Receiver)) %>%
-  #verify(Num.Receiver.Original >= Num.Receiver.Observed) %>% # Assert invariant 3
-  ungroup() 
-
-total_wo_splitting <- data %>%
-  group_by(Source.Section, Symbol) %>%
-  dplyr::mutate(Num.Receiver.Observed = n_distinct(Observed.Receiver)) %>%
-  dplyr::mutate(Num.Receiver.Original = n_distinct(Original.Receiver)) %>%
-  # Invariant 3 cannot be verified in this case
-  ungroup() 
-
+total_w_splitting <- add_number_receivers(data, Call.Site.Target)
+total_wo_splitting <- add_number_receivers(data, Call.Site)
+  
 ############################################## VARIABLES ############################################## 
 # Mainly used for latex macro and checking invariants
 
-Num.Call.Sites <- n_distinct(data$Source.Section, data$Symbol) 
-Num.Call.Sites.Incl.Splitted <- n_distinct(data$Source.Section, data$Symbol, data$CT.Address) 
-Num.Targets.Original <- n_distinct(total_w_splitting$Source.Section, total_w_splitting$Symbol, total_w_splitting$Num.Receiver.Original) 
-Num.Targets.Observed <- n_distinct(total_w_splitting$Source.Section, total_w_splitting$Symbol, total_w_splitting$Num.Receiver.Observed) 
-assert("There should not be more call-sites than call targets", Num.Targets.Original >= Num.Call.Sites) # assert invariant 4
-assert("There should not be more call-sites than splitted call sites", Num.Call.Sites.Incl.Splitted >= Num.Call.Sites) 
+Num.Call.Sites <- count_things(data, Call.Site)
+Num.Call.Sites.Incl.Splitted <-count_things(data, Call.Site.Target)
+
+Num.Targets.Original <- count_things(total_w_splitting, c(Call.Site.Target, "Num.Receiver.Original"))
+Num.Targets.Observed <- count_things(total_w_splitting, c(Call.Site.Target, "Num.Receiver.Observed"))
+testit::assert("There should not be more call-sites than call targets", Num.Targets.Original >= Num.Call.Sites) # assert invariant 4
+testit::assert("There should not be more call-sites than splitted call sites", Num.Call.Sites.Incl.Splitted >= Num.Call.Sites) 
 
 ############################################## POLYMORPHISM ##############################################
 
-#' Return a data frame that summarises polymoprhic behaviour in this run
-# Add: Num.Call.Sites (the number of call-sites associated with a given number of receivers), Cumulative
-#' @param num_receiver_column, whether we consider the observed or the original number of receivers  
-#' @param ct_address, whether we consider splitting 
-compute_num_target <- function(df_p, num_receiver_column) {
-  df <- df_p %>%
-    select(Source.Section, Symbol, !! sym(num_receiver_column)) %>% 
-    group_by(Source.Section, Symbol) %>%
-    slice(1) %>% # at this point, we have a line per call-site
-    group_by(!! sym(num_receiver_column)) %>%
-    dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol)) %>%
-    select(!! sym(num_receiver_column), Num.Call.Sites) %>%
-    slice(1) %>% #just keep the first of each source section
-    mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites))))
-  return(df)
-}
+num_target_original <- compute_num_target_details(total_wo_splitting, Call.Site, "Original.Receiver")
+num_target_observed <- compute_num_target_details(total_wo_splitting, Call.Site, "Observed.Receiver")
+testit::assert("Both tables should have the same number of call-sites", first(num_target_original$Cumulative.Call.Sites) == first(num_target_observed$Cumulative.Call.Sites))
+testit::assert("... And it should match the total number of call-sites", first(num_target_original$Cumulative.Call.Sites) == Num.Call.Sites)
 
-num_target_original <- compute_num_target(total_wo_splitting, "Num.Receiver.Original")
-num_target_observed <- compute_num_target(total_wo_splitting, "Num.Receiver.Observed")
-assert("Both tables should have the same number of call-sites", first(num_target_original$Cumulative) == first(num_target_observed$Cumulative))
-assert("... And it should match the total number of call-sites", first(num_target_original$Cumulative) == Num.Call.Sites)
-
-#' Return a data frame that summarises polymoprhic behaviour in this run, takes splitting into account
-# Add: Num.Call.Sites (the number of call-sites associated with a given number of receivers), Cumulative
-#' @param num_receiver_column, whether we consider the observed or the original number of receivers  
-#' @param ct_address, whether we consider splitting 
-compute_num_target_splitting <- function(df_p, num_receiver_column) {
-  df <- df_p %>%
-    select(Source.Section, Symbol, CT.Address, !! sym(num_receiver_column), Call.ID) %>% 
-    group_by(Source.Section, Symbol, CT.Address) %>%
-    dplyr::mutate(Num.Calls = n_distinct(Call.ID)) %>%
-    dplyr::mutate(Frequency = round(Num.Calls/nrow(data),7)*100) %>%
-    slice(1) %>% # at this point, we have a line per call-site
-    group_by(!! sym(num_receiver_column)) %>%
-    dplyr::mutate("Num.Calls.Total" = sum(Num.Calls)) %>%
-    dplyr::mutate("Frequency.Total" = sum(Frequency)) %>%
-    dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol, CT.Address)) %>%
-    select(!! sym(num_receiver_column), Num.Call.Sites, Frequency.Total, Num.Calls.Total) %>%
-    slice(1) %>% #just keep the first of each source section
-    mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites)))) %>%
-    mutate(Cumulative.Freq = rev(cumsum(rev(Frequency.Total)))) 
-  df <- df[, c(1, 2, 5, 4, 3, 6)] #reorganize columns
-  return(df)
-}
-
-
-num_target_original_w_splitting <- compute_num_target_splitting(total_w_splitting, "Num.Receiver.Original")
-num_target_observed_w_splitting <- compute_num_target_splitting(total_w_splitting, "Num.Receiver.Observed")
-assert("Both tables should have the same number of call-sites", first(num_target_original_w_splitting$Cumulative) == first(num_target_observed_w_splitting$Cumulative))
-assert("... And it should match the total number of call-sites", first(num_target_original_w_splitting$Cumulative) == Num.Call.Sites.Incl.Splitted)
+num_target_original_w_splitting <- compute_num_target_details(total_w_splitting, Call.Site.Target, "Original.Receiver")
+num_target_observed_w_splitting <- compute_num_target_details(total_w_splitting, Call.Site.Target,  "Observed.Receiver")
+testit::assert("Both tables should have the same number of call-sites", first(num_target_original_w_splitting$Cumulative.Call.Sites) == first(num_target_observed_w_splitting$Cumulative.Call.Sites))
+testit::assert("... And it should match the total number of call-sites", first(num_target_original_w_splitting$Cumulative.Call.Sites) == Num.Call.Sites.Incl.Splitted)
 
 # Add the cache type for each call-site
-total_w_splitting <- total_w_splitting %>%
-  ungroup() %>%
-  group_by(Source.Section, Symbol, CT.Address) %>%
-  dplyr::mutate(Cache.Type.Original = case_when(Num.Receiver.Original == 1 ~ "MONO",
-                                       Num.Receiver.Original > 1 & Num.Receiver.Original <= 8 ~ "POLY",
-                                       Num.Receiver.Original > 8 ~ "MEGA"))%>%
-  dplyr::mutate(Cache.Type.Observed = case_when(Num.Receiver.Observed == 1 ~ "MONO",
-                                       Num.Receiver.Observed > 1 & Num.Receiver.Observed <= 8 ~ "POLY",
-                                       Num.Receiver.Observed > 8 ~ "MEGA")) 
-
+total_w_splitting <- add_lookup_status_per_call(total_w_splitting)
 
 ############################################## TARGET POLYMORPHISM ##############################################
 
 # Add: Target.Polymorphism
 total_w_splitting <- total_w_splitting %>%
-  dplyr::mutate(Target.Polymorphism = (Observed.Receiver != Original.Receiver))
-
-# Add: Has.Changed.Status, Has.Changed.Status.aggr (the aggregated version, ie the final status of this call-site)
-total_w_splitting <- total_w_splitting %>%
-  group_by(Source.Section, Symbol, CT.Address) %>%
+  dplyr::mutate(Target.Polymorphism = (Observed.Receiver != Original.Receiver)) %>%
   dplyr::mutate(Has.Changed.Status = (Cache.Type.Observed != Cache.Type.Original)) %>%
-  dplyr::mutate(Has.Changed.Status.aggr = any(str_detect(Has.Changed.Status, 'TRUE'))) %>%
-  dplyr::mutate(Target.Polymorphism.aggr = any(str_detect(Target.Polymorphism, 'TRUE'))) %>%
-  dplyr::mutate(Invalid.Status = case_when(Cache.Type.Original == "MONO" & Num.Targets.Observed == "POLY" ~ 'TRUE',
-                                           Cache.Type.Original == "MONO" & Num.Targets.Observed == "MEGA" ~ 'TRUE',
-                                           Cache.Type.Original == "POLY" & Num.Targets.Observed == "MEGA" ~ 'TRUE')) 
+  check_invalid_transition()
 
-assert("Changes of cache status are only allowed from high degree of polymoprhism to low degree of polymoprhism", nrow(total_w_splitting %>%  dplyr::filter(grepl('TRUE', Invalid.Status))) == 0)
-total_w_splitting <- dplyr::select(total_w_splitting, -Invalid.Status) #We can safely drop this column then
-
-# How many source sections (call-sites) are changing LC status due to TP?
-Has.Experienced.TP <- nrow(total_w_splitting %>% group_by(Source.Section, Symbol, CT.Address) %>% slice(1) %>% filter(Target.Polymorphism.aggr == TRUE)) 
-Has.Changed.Status <- nrow(total_w_splitting %>% group_by(Source.Section, Symbol, CT.Address) %>% slice(1) %>% filter(Has.Changed.Status.aggr == TRUE)) 
-assert("Only call-sites having experienced target polymorphism can experience a change in the status of their cache", Has.Experienced.TP >= Has.Changed.Status)
-
-# give an overview of the evolution of caches after resolving target polymorphism
-summary_cache_change <- total_w_splitting %>%
-      dplyr::select(-Has.Changed.Status, -Target.Polymorphism) %>%
-      group_by(Source.Section, Symbol, CT.Address) %>% 
-      slice(1) %>% 
-      filter(Has.Changed.Status.aggr == TRUE)  %>%
-      group_by(Cache.Type.Original, Cache.Type.Observed) %>%
-      dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol, CT.Address)) %>%
-      select(Cache.Type.Original, Cache.Type.Observed, Num.Call.Sites) %>%
-      slice(1) 
+summary_tp <- has_changed_status(total_w_splitting)
+summary_tp <- merge(has_experienced_tp(total_w_splitting), summary_tp, by = "Value")
 
 # give an overview of the evolution of caches after resolving target polymorphism
 # at the granularity of cache size
-summary_cache_change_detail <- total_w_splitting %>%
-      dplyr::select(-Has.Changed.Status, -Target.Polymorphism) %>%
-      group_by(Source.Section, Symbol, CT.Address) %>% 
-      filter(Has.Changed.Status.aggr == TRUE)  %>%
-      group_by(Num.Receiver.Original, Num.Receiver.Observed) %>%
-      dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol, CT.Address)) %>%
-      select(Num.Receiver.Original, Num.Receiver.Observed, Num.Call.Sites) %>%
-      slice(1) %>%
-      mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites))))
-      #verify(first(Cumulative) == Has.Changed.Status) # the cumulative amount of TP call-site should be equal to Has.Changed.Status TODO-CHECK ##################################################################
-
-# give an overview of the evolution of caches after resolving target polymorphism
-# at the granularity of cache size
-# and provide details about the concerned call-sites
-summary_cache_change_detail_turbo <- total_w_splitting %>%
-      dplyr::select(-Has.Changed.Status, -Target.Polymorphism) %>%
-      group_by(Source.Section, Symbol, CT.Address) %>% 
-      filter(Has.Changed.Status.aggr == TRUE)  %>%
-      select(Num.Receiver.Original, Num.Receiver.Observed, Symbol, Source.Section, CT.Address, Original.Receiver, Observed.Receiver) %>%
-      dplyr::arrange(Num.Receiver.Original, Num.Receiver.Observed)
-      
+summary_cache_change_detail <- build_detailed_summary_tp(total_w_splitting)
+  
 ############################################## SPLITTING ##############################################    
-
-# Provide a list of splitted-call sites
-# Add: Times.Splitted, the number of times a call-site has been splitted
-generate_splitting_summary <- function(data, ...) {
-  df <- data %>%
-    select(...) %>%
-    group_by(Source.Section, Symbol) %>%
-    dplyr::mutate(Times.splitted = n_distinct(CT.Address) - 1) %>%  # -1 otherwise we count the call-sites that have one call target (ie not splitted)
-    dplyr::filter(Times.splitted > 0) %>%
-    dplyr::mutate(Num.Calls = n()) %>%
-    dplyr::mutate(Frequency = round(Num.Calls/nrow(data),3)*100)
-  return(df)
-}
-
-summary_splitting <- generate_splitting_summary(total_w_splitting, c("Source.Section", "Symbol", "CT.Address")) %>%
-  select(-CT.Address) %>%
-  slice(1) %>%
+summary_splitting <- generate_splitting_summary(total_w_splitting, c(Call.Site.Target, "Call.ID", "Observed.Receiver")) %>%
   dplyr::arrange(desc(Frequency)) %>%
   tibble::rowid_to_column(var="Rank")
 
-col <- c("Source.Section", "Symbol", "CT.Address", "Original.Receiver", "Observed.Receiver", "Num.Receiver.Observed", "Num.Receiver.Original")
-summary_splitting_detail_turbo <- generate_splitting_summary(total_w_splitting, all_of(col)) %>%
-  group_by(Source.Section, Symbol, CT.Address) %>%
-  slice(1) %>%
-  dplyr::arrange(desc(Times.splitted)) 
+num_calls_splitted <- total_w_splitting %>%
+  group_by_at(Call.Site) %>%
+  dplyr::mutate(Times.Splitted = n_distinct(CT.Address) - 1) %>%
+  filter(Times.Splitted > 0)
 
-# Was splitting useful? State of lookup cache after splitting
-effect_splitting <- total_w_splitting %>%
-  group_by(Source.Section, Symbol) %>%
-  dplyr::mutate(Times.splitted = n_distinct(CT.Address) - 1) %>%  # -1 otherwise we count the call-sites that have one call target (ie not splitted)
-  dplyr::filter(Times.splitted > 0) %>%
-  dplyr::filter(Source.Section != "(core):1:1:0" & Source.Section != "(unavailable):1:1:0") %>%
-  ungroup %>%
-  group_by(Source.Section, Symbol, CT.Address) %>%
-  dplyr::arrange(.by_group = TRUE) %>%
-  filter(row_number() == 1  ) %>%  #keep first and last of each group, this way we can sort 
-  dplyr::arrange(Source.Section, Symbol, Call.ID) 
+Num.Splitted.Call.Sites <- count_things(num_calls_splitted, Call.Site)
 
-# for each group {Source.Section, Symbol}
-#     order each subgroup {CT.Address} against one another, and give them a rank
-#     then compare each subgroup with its n-1 and n+1 and check the evolution of their cache
+transition_data <- analyse_splitting_transitions(total_w_splitting, benchmark_name)
 
-effect_splitting <- effect_splitting %>%
-  group_by(Source.Section, Symbol) %>%
-  dplyr::mutate(Group.ID = cur_group_id()) %>%
-  ungroup() %>%
-  group_by(Source.Section, Symbol, CT.Address) %>%
-  dplyr::mutate(Sub.Group.ID = cur_group_id()) %>%
-  dplyr::arrange(Sub.Group.ID, Call.ID) 
-
-effect_splitting <- effect_splitting %>%
-    ungroup %>%
-    group_by(Group.ID) %>%
-    dplyr::filter(any(Cache.Type.Observed== 'POLY')) %>%
-    group_by(Group.ID, Sub.Group.ID) %>%
-    dplyr::arrange(Group.ID, Call.ID, Sub.Group.ID) %>%
-    ungroup() %>%
-    dplyr::select(Call.ID, Symbol, Source.Section, CT.Address, Cache.Type.Observed, Group.ID, Sub.Group.ID) 
-
-# After many convoluted moves, this table is the one 
-# TODO - This is NOT taking into account different set of receivers, but it should
-effect_splitting <- effect_splitting %>%
-  ungroup() %>%
-  dplyr::arrange(Source.Section, Symbol, Call.ID) %>%
-  group_by(Source.Section, Symbol) %>%
-  dplyr::mutate(prev=dplyr::lag(Cache.Type.Observed)) %>%
-  dplyr::mutate(Splitting.Effect = case_when(is.na(prev) ~ 0,
-                                             prev == 'POLY' & Cache.Type.Observed == 'MONO' ~ 0,
-                                             prev == 'MEGA' & Cache.Type.Observed == 'MONO' ~ 0, 
-                                             prev == 'MEGA' & Cache.Type.Observed == 'POLY' ~ 0,
-                                             prev == Cache.Type.Observed ~ 0,
-                                             prev == 'MONO' & Cache.Type.Observed == 'POLY' ~ 1,
-                                             prev == 'MONO' & Cache.Type.Observed == 'MEGA' ~ 1,
-                                             prev == 'POLY' & Cache.Type.Observed == 'MEGA' ~ 1) )    
-
-# Summarises the splitting behaviour
-# Check each splitting transition
-effect_splitting_summary <- effect_splitting %>%
-  ungroup() %>%
-  group_by(prev, Cache.Type.Observed) %>%
-  dplyr::summarise(Num.Call.Sites = n())
+Number.Splits <- nrow(transition_data)
+splitting_transition_summary_sites <- summarise_transition_sites(transition_data)
+# get frequency according to number of splits
+splitting_transition_summary_frequency <- summarise_transition_frequency(transition_data, Number.Splits)
   
 ############################################## MANUAL INSPECTION ############################################## 
   
@@ -383,9 +190,15 @@ dir.create(splitting_lifetime_folder)
 split_lifetime <- function(df, ss, symb) {
   filtered_data <- df %>% filter(Source.Section == ss & Symbol == symb) 
   
-  p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=as.character(CT.Address), color=as.character(CT.Address))) + geom_point(size = 0.5, alpha = 0.4) 
-  p <- p + xlab("Call ID") + ylab("Target") + theme(legend.position = "none") + ggtitle(paste("Split targets lifetime for Selector: ",filtered_data$Symbol, ", in source: ", filtered_data$Source.Section))
+  p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=as.character(CT.Address), color=Cache.Type.Observed)) + geom_point(size = 0.5, alpha = 0.4) 
+  p <- p + xlab("Call ID") + ylab("Target") + ggtitle(paste("Split targets lifetime for Selector: ",filtered_data$Symbol, ", in source: ", filtered_data$Source.Section))
     p <- p + theme(text = element_text(size=10)) 
+    p <- p + theme(
+    legend.position = c(.95, .95),
+    legend.justification = c("right", "top"),
+    legend.box.just = "right",
+    legend.margin = margin(6, 6, 6, 6)
+    )
  return (p)
 }
 
@@ -406,33 +219,6 @@ if (nrow(summary_splitting) != 0) {
   apply(head(summary_splitting, 30), 1, f) 
 }
 
-############################################## PLOT GENERATION - ##############################################
-
-# plot_calls_sub <- function(ss, symb) {
-#   filtered_data <- polymorphic_call_sites %>% filter(Source.Section == ss)
-#   dir_name = paste(now,paste(symb,gsub("*/","_",ss),sep="_"),sep="/")
-#   dir.create(dir_name)
-#   for (addr in unique(filtered_data$CT.Address)) {
-#     filtered_data_addr <- polymorphic_call_sites %>% filter(Source.Section == ss) %>% filter(CT.Address == addr) 
-#     p <- ggplot(data = filtered_data_addr, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, color=Observed.Receiver)) + geom_point(size = 0.5, alpha = 0.4) 
-#     p <- p  + xlab("Call ID") + ylab("Target") + theme(legend.position = "none") + ggtitle(paste("Selector: ",filtered_data_addr$Symbol, ", in source: ", filtered_data_addr$Source.Section))
-#     p <- p + theme(text = element_text(size=15)) 
-#     ss <- gsub("*/","_",ss)
-#     ggsave(p, path=dir_name, filename=paste(addr,ss,"plot.png", sep="_"), height = 300, width = 500, units="mm")
-#   }
-#   return (ss)
-# }
-# 
-# f_subdir <- function(row) {
-#   ss <- row['Source.Section']
-#   symb <- row['Symbol']
-#   rec <- row['Observed.Receiver']
-#   rank <- row['Rank']
-#   o <- plot_calls_sub(ss, symb)
-# }
-# 
-# apply(head(table_optimizable,30), 1, f_subdir) 
-
 ############################################## TABLES ###############################################    
 
 ## TABLE GENERATION
@@ -450,14 +236,11 @@ distrib_cache_size_original_splitting <- xtable(num_target_original_w_splitting,
 distrib_cache_size_original_splitting <- autoformat(distrib_cache_size_original_splitting, zap = getOption("digits"))
 
 # Target polymorphism
-target_polymorphism <- xtable(summary_cache_change, caption = "Distribution of call-targets (Observed) - Splitting ignored")
+target_polymorphism <-  xtable(summary_tp, caption = "Distribution of call-targets (Observed) - Splitting ignored")
 target_polymorphism <- autoformat(target_polymorphism, zap = getOption("digits"))
 
 target_polymorphism_detail <- xtable(summary_cache_change_detail, caption = "Distribution of call-targets (Observed) - Splitting ignored")
 target_polymorphism_detail <- autoformat(target_polymorphism_detail, zap = getOption("digits"))
-
-target_polymorphism_turbo <- xtable(summary_cache_change_detail_turbo, caption = "Distribution of call-targets (Observed) - Splitting ignored")
-target_polymorphism_turbo <- autoformat(target_polymorphism_turbo, zap = getOption("digits"))
 
 # Hottest call-sites
 hottest_mega_ct_table <- xtable(table_optimizable, caption = "Hottest megamorphic call sites")
@@ -473,8 +256,11 @@ most_executed <- autoformat(most_executed, zap = getOption("digits"))
 splitting_table <- xtable(head(summary_splitting %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='left'), 30), type = "latex")
 splitting_table <- autoformat(splitting_table, zap = getOption("digits"))
 
-effect_splitting_table <- xtable(effect_splitting_summary, type = "latex")
-effect_splitting_table <- autoformat(effect_splitting_table, zap = getOption("digits"))
+effect_splitting_sites_table <- xtable(splitting_transition_summary_sites, type = "latex")
+effect_splitting_sites_table <- autoformat(effect_splitting_sites_table, zap = getOption("digits"))
+
+effect_splitting_frequency_table <- xtable(splitting_transition_summary_frequency, type = "latex")
+effect_splitting_frequency_table <- autoformat(effect_splitting_frequency_table, zap = getOption("digits"))
 # TODO
 distrib_split_per_ct_table <- xtable(summary_splitting, caption = "Distribution of splits per target")
 distrib_split_per_ct_table <- autoformat(distrib_split_per_ct_table, zap = getOption("digits"))
@@ -485,32 +271,7 @@ dir.create(table_folder)
 print(xtable(distrib_cache_size_obs_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"call_target_distrib.tex", sep="/"))
 print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE, file = paste(table_folder,"hottest_megamorphic_call_sites.tex", sep="/"))
 print(xtable(distrib_split_per_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"splits_per_target.tex", sep="/"))
-print(xtable(summary_splitting_detail_turbo %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='left'), type = "latex"), include.rownames=FALSE, tabular.environment="longtable", floating=FALSE,  file = paste(table_folder,"splitting_details.tex", sep="/"))
-
-############################################## VARIBALES GENERATION ##############################################
-
-is.integer0 <- function(x)
-{
-  return (is.integer(x) && length(x) == 0L)
-}
-
-convert_as_integer <- function(df) {
-  result <- 0
-  if (!is.integer0(df$Cumulative)) {
-    result <- head(df$Cumulative,1)
-  } 
-  return(result)
-}
-
-Num.Polymorphic.SplittingObserved <- convert_as_integer(distrib_cache_size_obs_splitting %>% filter(Num.Receiver.Observed >= 2 & Num.Receiver.Observed < 9))
-Num.Polymorphic.NoSplittingObserved <- convert_as_integer(distrib_cache_size_obs_no_splitting %>% filter(Num.Receiver.Observed >= 2 & Num.Receiver.Observed < 9))
-Num.Polymorphic.SplittingOriginal <- convert_as_integer(distrib_cache_size_original_splitting %>% filter(Num.Receiver.Original >= 2 & Num.Receiver.Original < 9))
-Num.Polymorphic.NoSplittingOriginal <- convert_as_integer(distrib_cache_size_original_no_splitting %>% filter(Num.Receiver.Original >= 2 & Num.Receiver.Original < 9))
-
-Num.Megamorphic.SplittingObserved <- convert_as_integer(distrib_cache_size_obs_splitting %>% filter(Num.Receiver.Observed >= 9))
-Num.Megamorphic.NoSplittingObserved <- convert_as_integer(distrib_cache_size_obs_no_splitting %>% filter(Num.Receiver.Observed >= 9))
-Num.Megamorphic.SplittingOriginal <- convert_as_integer(distrib_cache_size_original_splitting %>% filter(Num.Receiver.Original >= 9))
-Num.Megamorphic.NoSplittingOriginal <- convert_as_integer(distrib_cache_size_original_no_splitting %>% filter(Num.Receiver.Original >= 9))
+print(xtable(summary_splitting %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='left'), type = "latex"), include.rownames=FALSE, tabular.environment="longtable", floating=FALSE,  file = paste(table_folder,"splitting_details.tex", sep="/"))
 
 ############################################## LATEX COMMAND GENERATION ##############################################
 
@@ -551,21 +312,21 @@ print(xtable(target_polymorphism_detail, type = "latex"), include.rownames=FALSE
   @
   }%
 
-\def\TargetPolymorphismTurbo{%
-<<TargetPolymorphismTurbo, echo=FALSE, results='asis'>>=
-print(xtable(target_polymorphism_turbo, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
-  @
-  }%
-
 \def\Splitting{%
 <<Splitting, echo=FALSE, results='asis'>>=
 print(splitting_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
       @
   }%
   
-  \def\EffectSplitting{%
-<<EffectSplitting, echo=FALSE, results='asis'>>=
-print(effect_splitting_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
+  \def\EffectSplittingSites{%
+<<EffectSplittingSites, echo=FALSE, results='asis'>>=
+print(effect_splitting_sites_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
+      @
+  }%
+  
+  \def\EffectSplittingFrequency{%
+<<EffectSplittingFrequency, echo=FALSE, results='asis'>>=
+print(effect_splitting_frequency_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
       @
   }%
 
@@ -601,20 +362,7 @@ print(xtable(most_executed, type = "latex"), include.rownames=TRUE, tabular.envi
 
 \newcommand{\NumberCalls}{$\Sexpr{nrow(data)}$\xspace}
 \newcommand{\NumOfSplittedTargets}{$\Sexpr{nrow(summary_splitting)}$\xspace}
-
-\newcommand{\NumPolymorphicSplittingObserved}{$\Sexpr{Num.Polymorphic.SplittingObserved}$\xspace}
-\newcommand{\NumPolymorphicNoSplittingObserved}{$\Sexpr{Num.Polymorphic.NoSplittingObserved}$\xspace}
-\newcommand{\NumPolymorphicSplittingOriginal}{$\Sexpr{Num.Polymorphic.SplittingOriginal}$\xspace}
-\newcommand{\NumPolymorphicNoSplittingOriginal}{$\Sexpr{Num.Polymorphic.NoSplittingOriginal}$\xspace}
-
-\newcommand{\NumMegamorphicSplittingObserved}{$\Sexpr{Num.Megamorphic.SplittingObserved}$\xspace}
-\newcommand{\NumMegamorphicNoSplittingObserved}{$\Sexpr{Num.Megamorphic.NoSplittingObserved}$\xspace}
-\newcommand{\NumMegamorphicSplittingOriginal}{$\Sexpr{Num.Megamorphic.SplittingOriginal}$\xspace}
-\newcommand{\NumMegamorphicNoSplittingOriginal}{$\Sexpr{Num.Megamorphic.NoSplittingOriginal}$\xspace}
-
-\newcommand{\HasChangedStatus}{$\Sexpr{Has.Changed.Status}$\xspace}
-\newcommand{\HasExperiencedTP}{$\Sexpr{Has.Experienced.TP}$\xspace}
-
+\newcommand{\NumsOfSplits}{$\Sexpr{Number.Splits}$\xspace}
 
 
 

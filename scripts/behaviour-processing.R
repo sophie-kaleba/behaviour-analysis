@@ -70,7 +70,7 @@ compute_num_target_details <- function(df_p, call_site_type, receiver_type) {
 add_lookup_status_per_call <- function(df_p) {
   df <- df_p %>%
     ungroup() %>%
-    group_by_at(Call.Site.Target) %>%
+    group_by_at(c(Call.Site.Target, "Benchmark")) %>%
     dplyr::mutate(Cache.Type.Original = case_when(Num.Receiver.Original == 1 ~ "MONO",
                                         Num.Receiver.Original > 1 & Num.Receiver.Original <= 8 ~ "POLY",
                                         Num.Receiver.Original > 8 ~ "MEGA"))%>%

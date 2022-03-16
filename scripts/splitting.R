@@ -24,8 +24,8 @@ analyse_splitting_transitions <- function(df_p, benchmark_name) {
   raw_splitting <- raw_splitting %>% dplyr::select(Call.ID, Symbol, Source.Section, CT.Address, Observed.Receiver, Benchmark, Num.Receiver.Observed, Cache.Type.Observed, Times.splitted, Num.Calls.Target)
 
   # and export it as a csv file so our java program can analyse it
-  split_file <-  paste(getwd(),"/",benchmark_name,"splitting_data.csv", sep="")
-  out_split_file <- paste(getwd(),"/","out_",benchmark_name,"splitting_data.csv", sep="")
+  split_file <-  paste(getwd(),"/",benchmark_name,"_splitting_data.csv", sep="")
+  out_split_file <- paste(getwd(),"/","out_",benchmark_name,"_splitting_data.csv", sep="")
   write.csv(raw_splitting, split_file, row.names = FALSE)
 
   # call the java program to analyze the data, and then fetch back the results
@@ -50,8 +50,20 @@ summarise_transition_sites <- function(df_p) {
   transition_data <- transition_data %>% 
     tidyr::unite("Transition", Start.State:End.State, remove = TRUE, sep=" -> ") %>%
     tidyr::unite("Transition", Transition:Transition.Type, remove = TRUE, sep="_") %>%
-    tidyr::spread(Transition, Num.Transitions)
+    tidyr::spread(Benchmark, Num.Transitions)
 
+  transition_data$Transition <- revalue(transition_data$Transition, c("MONOMORPHIC -> MONOMORPHIC_Different" = "MONO->MONO (!=)",
+                                                                      "MONOMORPHIC -> MONOMORPHIC_Same" = "MONO->MONO (=)",
+                                                                      "MONOMORPHIC -> POLYMORPHIC_Different" = "MONO->POLY",
+                                                                      "MONOMORPHIC -> MEGAMORPHIC_Different" = "MONO->MEGA",
+                                                                      "POLYMORPHIC -> POLYMORPHIC_Different" = "POLY->POLY (!=)",
+                                                                      "POLYMORPHIC -> POLYMORPHIC_Same" = "POLY->POLY (=)",
+                                                                      "POLYMORPHIC -> MONOMORPHIC_Different" = "POLY->MONO",
+                                                                      "POLYMORPHIC -> MEGAMORPHIC_Different" = "POLY->MEGA",
+                                                                      "MEGAMORPHIC -> MEGAMORPHIC_Different" = "MEGA->MEGA (!=)",
+                                                                      "MEGAMORPHIC -> MEGAMORPHIC_Same" = "MEGA->MEGA (=)",
+                                                                      "MEGAMORPHIC -> POLYMORPHIC_Different" = "MEGA->POLY",
+                                                                      "MEGAMORPHIC -> MONOMORPHIC_Different" = "MEGA->MONO"))
   return(transition_data)
 }
 
@@ -69,7 +81,20 @@ summarise_transition_frequency <- function(df_p, type_calls) {
   transition_data <- transition_data %>% 
     tidyr::unite("Transition", Start.State:End.State, remove = TRUE, sep=" -> ") %>%
     tidyr::unite("Transition", Transition:Transition.Type, remove = TRUE, sep="_") %>%
-    tidyr::spread(Transition, Frequency)
+    tidyr::spread(Benchmark, Frequency)
+
+  transition_data$Transition <- revalue(transition_data$Transition, c("MONOMORPHIC -> MONOMORPHIC_Different" = "MONO->MONO (!=)",
+                                                                      "MONOMORPHIC -> MONOMORPHIC_Same" = "MONO->MONO (=)",
+                                                                      "MONOMORPHIC -> POLYMORPHIC_Different" = "MONO->POLY",
+                                                                      "MONOMORPHIC -> MEGAMORPHIC_Different" = "MONO->MEGA",
+                                                                      "POLYMORPHIC -> POLYMORPHIC_Different" = "POLY->POLY (!=)",
+                                                                      "POLYMORPHIC -> POLYMORPHIC_Same" = "POLY->POLY (=)",
+                                                                      "POLYMORPHIC -> MONOMORPHIC_Different" = "POLY->MONO",
+                                                                      "POLYMORPHIC -> MEGAMORPHIC_Different" = "POLY->MEGA",
+                                                                      "MEGAMORPHIC -> MEGAMORPHIC_Different" = "MEGA->MEGA (!=)",
+                                                                      "MEGAMORPHIC -> MEGAMORPHIC_Same" = "MEGA->MEGA (=)",
+                                                                      "MEGAMORPHIC -> POLYMORPHIC_Different" = "MEGA->POLY",
+                                                                      "MEGAMORPHIC -> MONOMORPHIC_Different" = "MEGA->MONO"))
 
   return(transition_data)
 }
