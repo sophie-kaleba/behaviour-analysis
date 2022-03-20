@@ -38,7 +38,7 @@ analyse_splitting_transitions <- function(df_p, benchmark_name) {
 }
 
 
-summarise_transition_sites <- function(df_p) {
+summarise_transition_targets <- function(df_p) {
   transition_data <- df_p %>%
     dplyr::mutate(Transition.Type = case_when( Start.State == 'POLYMORPHIC' & End.State == 'POLYMORPHIC' & Intersect.Size == Union.Size ~ "Same",
                                              Start.State == 'MONOMORPHIC' & End.State == 'MONOMORPHIC' & Intersect.Size == Union.Size ~ "Same",
@@ -46,6 +46,35 @@ summarise_transition_sites <- function(df_p) {
                                              TRUE ~ "Different")) %>%
     group_by(Benchmark, Start.State, End.State, Transition.Type) %>%
     dplyr::summarise(Num.Transitions = n())
+
+  transition_data <- transition_data %>% 
+    tidyr::unite("Transition", Start.State:End.State, remove = TRUE, sep=" -> ") %>%
+    tidyr::unite("Transition", Transition:Transition.Type, remove = TRUE, sep="_") %>%
+    tidyr::spread(Benchmark, Num.Transitions)
+
+  transition_data$Transition <- revalue(transition_data$Transition, c("MONOMORPHIC -> MONOMORPHIC_Different" = "MONO->MONO (!=)",
+                                                                      "MONOMORPHIC -> MONOMORPHIC_Same" = "MONO->MONO (=)",
+                                                                      "MONOMORPHIC -> POLYMORPHIC_Different" = "MONO->POLY",
+                                                                      "MONOMORPHIC -> MEGAMORPHIC_Different" = "MONO->MEGA",
+                                                                      "POLYMORPHIC -> POLYMORPHIC_Different" = "POLY->POLY (!=)",
+                                                                      "POLYMORPHIC -> POLYMORPHIC_Same" = "POLY->POLY (=)",
+                                                                      "POLYMORPHIC -> MONOMORPHIC_Different" = "POLY->MONO",
+                                                                      "POLYMORPHIC -> MEGAMORPHIC_Different" = "POLY->MEGA",
+                                                                      "MEGAMORPHIC -> MEGAMORPHIC_Different" = "MEGA->MEGA (!=)",
+                                                                      "MEGAMORPHIC -> MEGAMORPHIC_Same" = "MEGA->MEGA (=)",
+                                                                      "MEGAMORPHIC -> POLYMORPHIC_Different" = "MEGA->POLY",
+                                                                      "MEGAMORPHIC -> MONOMORPHIC_Different" = "MEGA->MONO"))
+  return(transition_data)
+}
+
+summarise_transition_sites <- function(df_p) {
+  transition_data <- df_p %>%
+    dplyr::mutate(Transition.Type = case_when( Start.State == 'POLYMORPHIC' & End.State == 'POLYMORPHIC' & Intersect.Size == Union.Size ~ "Same",
+                                             Start.State == 'MONOMORPHIC' & End.State == 'MONOMORPHIC' & Intersect.Size == Union.Size ~ "Same",
+                                             Start.State == 'MEGAMORPHIC' & End.State == 'MEGAMORPHIC' & Intersect.Size == Union.Size ~ "Same",
+                                             TRUE ~ "Different")) %>%
+    group_by(Benchmark, Start.State, End.State, Transition.Type) %>%
+    dplyr::summarise(Num.Transitions = n_distinct(Source.Section, Symbol))
 
   transition_data <- transition_data %>% 
     tidyr::unite("Transition", Start.State:End.State, remove = TRUE, sep=" -> ") %>%

@@ -67,6 +67,25 @@ compute_num_target_details <- function(df_p, call_site_type, receiver_type) {
   return(df)
 }
 
+#' Return a data frame that summarises polymoprhic behaviour in this run, takes splitting into account
+# Add: Num.Call.Sites (the number of call-sites associated with a given number of receivers), Cumulative
+#' @param num_receiver_column, whether we consider the observed or the original number of receivers  
+#' @param ct_address, whether we consider splitting 
+compute_num_target_global <- function(df_p, call_site_type, receiver_type) {
+  df <- df_p %>%
+    select(c(all_of(call_site_type), !! sym(receiver_type), Call.ID), "Benchmark") %>% 
+    dplyr::group_by_at(c(all_of(call_site_type), "Benchmark")) %>%
+    dplyr::summarise(Num.Receiver = dplyr::n_distinct(!! sym(receiver_type)), Num.Calls = n_distinct(Call.ID)) %>%
+    group_by(Num.Receiver, Benchmark)  %>%
+    dplyr::summarise(Num.Call.Sites = n(), Num.Calls=sum(Num.Calls)) %>%
+    group_by(Benchmark) %>%
+    dplyr::mutate(Cumulative.Call.Sites = rev(cumsum(rev(Num.Call.Sites)))) %>%
+    dplyr::mutate(Cumulative.Calls = rev(cumsum(rev(Num.Calls)))) %>%
+    dplyr::mutate(Frequency = round(Num.Calls/sum(Num.Calls),7)*100)  %>%
+    dplyr::mutate(Cumulative.Freq = rev(cumsum(rev(Frequency))))
+  return(df)
+}
+
 add_lookup_status_per_call <- function(df_p) {
   df <- df_p %>%
     ungroup() %>%
@@ -77,6 +96,16 @@ add_lookup_status_per_call <- function(df_p) {
     dplyr::mutate(Cache.Type.Observed = case_when(Num.Receiver.Observed == 1 ~ "MONO",
                                         Num.Receiver.Observed > 1 & Num.Receiver.Observed <= 8 ~ "POLY",
                                         Num.Receiver.Observed > 8 ~ "MEGA")) 
+  return(df)
+}
+
+add_lookup_status <- function(df_p, type) {
+  df <- df_p %>%
+    ungroup() %>%
+    group_by_at(c(type, "Benchmark")) %>%
+    dplyr::mutate(Cache.Type = case_when(Num.Receiver == 1 ~ "MONO",
+                                        Num.Receiver > 1 & Num.Receiver <= 8 ~ "POLY",
+                                        Num.Receiver > 8 ~ "MEGA")) 
   return(df)
 }
 

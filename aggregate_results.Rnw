@@ -17,16 +17,63 @@ if (Sys.getenv("RSTUDIO") == "1") {
 
 source("./scripts/libraries.R", chdir=TRUE)
 
-data <- load_all_data("/home/sopi/Documents/Side_projects/behaviour-analysis/results/parsed_files/16march/methods/", FALSE)
+data <- load_all_data("/home/sopi/Documents/Side_projects/behaviour-analysis/results/processed_files/16march/methods/", FALSE)
+data_block <- load_all_data("/home/sopi/Documents/Side_projects/behaviour-analysis/results/processed_files/16march/methods/", TRUE)
+data_block$Symbol <- "yield|call|[]"
+
+data$Benchmark <- revalue(data$Benchmark, c("BlogRailsRoutesTwoRoutesTwoRequests" = "BlogRailsPhase", "BlogRailsRoutes" = "BlogRails"))
+data_block$Benchmark <- revalue(data_block$Benchmark, c("BlogRailsRoutesTwoRoutesTwoRequests" = "BlogRailsPhase", "BlogRailsRoutes" = "BlogRails"))
 
 # Table summarizing the amount of call sites being mono, poly, mega
 total_w_splitting <- add_number_receivers(data, c(Call.Site.Target, "Benchmark"))
-num_target_observed_w_splitting <- compute_num_target_details(total_w_splitting, Call.Site.Target,  "Observed.Receiver")
+total_wo_splitting <- add_number_receivers(data, c(Call.Site, "Benchmark"))
 
-cache_status_sites <- create_aggregate_table(num_target_observed_w_splitting, c("Benchmark", "Num.Receiver", "Num.Call.Sites"),"Num.Receiver", "Num.Call.Sites")
-cache_status_calls <- head(create_aggregate_table(num_target_observed_w_splitting, c("Benchmark", "Num.Receiver", "Frequency"),"Num.Receiver", "Frequency"), -1)
+block_w_splitting <- add_number_receivers(data_block, c(Call.Site.Target, "Benchmark"))
+block_wo_splitting <- add_number_receivers(data_block, c(Call.Site, "Benchmark"))
+  
+num_target_observed_wo_splitting_tp <- compute_num_target_details(total_wo_splitting, Call.Site,  "Observed.Receiver")
+num_target_original_wo_splitting <- compute_num_target_details(total_wo_splitting, Call.Site,  "Original.Receiver")
+num_target_observed_w_splitting_tp <- compute_num_target_details(total_w_splitting, Call.Site.Target,  "Observed.Receiver")
+
+block_num_target_observed_w_splitting_tp <- compute_num_target_details(block_w_splitting, Call.Site.Target,  "Observed.Receiver")
+
+cache_status_sites <- create_aggregate_table(num_target_observed_w_splitting_tp, c("Benchmark", "Num.Receiver", "Num.Call.Sites"),"Num.Receiver", "Num.Call.Sites")
+cache_status_calls <- head(create_aggregate_table(num_target_observed_w_splitting_tp, c("Benchmark", "Num.Receiver", "Frequency"),"Num.Receiver", "Frequency"), -1)
 
 total_w_splitting <- add_lookup_status_per_call(total_w_splitting)
+
+
+######################################### PLOTS #############################
+
+colnames(cache_status_sites) <- paste("a", colnames(cache_status_sites), "a", sep = "")
+
+colnms=c("2", "3", "4", "5")
+cache_status_sites$"MONO" <- rowSums(cache_status_sites[,c("1")])
+cache_status_sites$"POLY"<-rowSums(cache_status_sites[,colnms])
+
+
+num_target_original_wo_splitting <- add_lookup_status(num_target_original_wo_splitting, c())
+stacked_percent_callsites <- ggplot(num_target_original_wo_splitting, aes(fill=Cache.Type, y=Num.Call.Sites, x=Benchmark)) + theme(text = element_text(size=18), axis.text.x = element_text(angle = 70, hjust=1)) + scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+    geom_bar(position="fill", stat="identity") 
+
+
+stacked_percent_calls <- ggplot(num_target_original_wo_splitting, aes(fill=Cache.Type, y=Num.Calls, x=Benchmark)) + theme(text = element_text(size=18), axis.text.x = element_text(angle = 70, hjust=1)) + scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+    geom_bar(position="fill", stat="identity") 
+
+
+  
+block_num_target_observed_w_splitting_tp <- add_lookup_status(block_num_target_observed_w_splitting_tp, c())
+
+block_stacked_percent_callsites <- ggplot(block_num_target_observed_w_splitting_tp, aes(fill=Cache.Type, y=Num.Call.Sites, x=Benchmark)) + theme(text = element_text(size=18), axis.text.x = element_text(angle = 70, hjust=1)) + scale_fill_manual(values=c("#00ba38", "#619cff")) + scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+    geom_bar(position="fill", stat="identity") 
+
+block_stacked_percent_calls <- ggplot(block_num_target_observed_w_splitting_tp, aes(fill=Cache.Type, y=Num.Calls, x=Benchmark)) + theme(text = element_text(size=18), axis.text.x = element_text(angle = 70, hjust=1)) + scale_fill_manual(values=c("#00ba38", "#619cff")) + scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+    geom_bar(position="fill", stat="identity") 
+
+ggplot(mapping=aes(x=dat))+
+  geom_bar(data=y, aes(x=dat-0.1), fill="red", binwidth=0.1)+
+  geom_bar(data=x, fill="blue", binwidth=0.1)
+
 
 ################################################## Splitting
 summary_splitting <- generate_splitting_summary(total_w_splitting, c(Call.Site.Target, "Call.ID", "Observed.Receiver")) %>%
@@ -44,5 +91,6 @@ transition_data <- analyse_splitting_transitions(total_w_splitting, "all")
 
 # TODO - need it by benchmark - Number.Splits <- nrow(transition_data)
 splitting_transition_summary_sites <- summarise_transition_sites(transition_data) %>% replace(is.na(.), 0) %>% janitor::adorn_totals("row")  
+splitting_transition_summary_targets <- summarise_transition_targets(transition_data) %>% replace(is.na(.), 0) %>% janitor::adorn_totals("row")  
 # get frequency according to number of splits
 #splitting_transition_summary_frequency <- summarise_transition_frequency(transition_data, Number.Splits)
