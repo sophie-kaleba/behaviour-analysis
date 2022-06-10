@@ -45,19 +45,31 @@ total_w_splitting <- add_lookup_status_per_call(total_w_splitting)
 
 ######################################### PLOTS #############################
 
-colnames(cache_status_sites) <- paste("a", colnames(cache_status_sites), "a", sep = "")
-
-colnms=c("2", "3", "4", "5")
-cache_status_sites$"MONO" <- rowSums(cache_status_sites[,c("1")])
-cache_status_sites$"POLY"<-rowSums(cache_status_sites[,colnms])
-
-
 num_target_original_wo_splitting <- add_lookup_status(num_target_original_wo_splitting, c())
+num_target_observed_wo_splitting_tp <- add_lookup_status(num_target_observed_wo_splitting_tp, c())
+num_target_observed_w_splitting_tp <- add_lookup_status(num_target_observed_w_splitting_tp, c())
+
 stacked_percent_callsites <- ggplot(num_target_original_wo_splitting, aes(fill=Cache.Type, y=Num.Call.Sites, x=Benchmark)) + theme(text = element_text(size=18), axis.text.x = element_text(angle = 70, hjust=1)) + scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
     geom_bar(position="fill", stat="identity") 
 
 
 stacked_percent_calls <- ggplot(num_target_original_wo_splitting, aes(fill=Cache.Type, y=Num.Calls, x=Benchmark)) + theme(text = element_text(size=18), axis.text.x = element_text(angle = 70, hjust=1)) + scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+    geom_bar(position="fill", stat="identity") 
+
+###########
+
+stacked_percent_callsites_tp <- ggplot(num_target_observed_wo_splitting_tp, aes(fill=Cache.Type, y=Num.Call.Sites, x=Benchmark)) + theme(text = element_text(size=18), axis.text.x = element_text(angle = 70, hjust=1))+ scale_fill_manual(values=c("#00ba38", "#619cff")) + scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+    geom_bar(position="fill", stat="identity") 
+
+stacked_percent_calls_tp <- ggplot(num_target_observed_wo_splitting_tp, aes(fill=Cache.Type, y=Num.Calls, x=Benchmark)) + theme(text = element_text(size=18), axis.text.x = element_text(angle = 70, hjust=1))+ scale_fill_manual(values=c("#00ba38", "#619cff")) + scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+    geom_bar(position="fill", stat="identity") 
+
+###########
+
+stacked_percent_callsites_splitting <- ggplot(num_target_observed_w_splitting_tp, aes(fill=Cache.Type, y=Num.Call.Sites, x=Benchmark)) + theme(text = element_text(size=18), axis.text.x = element_text(angle = 70, hjust=1))+ scale_fill_manual(values=c("#00ba38", "#619cff")) + scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+    geom_bar(position="fill", stat="identity") 
+
+stacked_percent_calls_splitting <- ggplot(num_target_observed_w_splitting_tp, aes(fill=Cache.Type, y=Num.Calls, x=Benchmark)) + theme(text = element_text(size=18), axis.text.x = element_text(angle = 70, hjust=1))+ scale_fill_manual(values=c("#00ba38", "#619cff")) + scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
     geom_bar(position="fill", stat="identity") 
 
 
@@ -70,9 +82,19 @@ block_stacked_percent_callsites <- ggplot(block_num_target_observed_w_splitting_
 block_stacked_percent_calls <- ggplot(block_num_target_observed_w_splitting_tp, aes(fill=Cache.Type, y=Num.Calls, x=Benchmark)) + theme(text = element_text(size=18), axis.text.x = element_text(angle = 70, hjust=1)) + scale_fill_manual(values=c("#00ba38", "#619cff")) + scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
     geom_bar(position="fill", stat="identity") 
 
-ggplot(mapping=aes(x=dat))+
-  geom_bar(data=y, aes(x=dat-0.1), fill="red", binwidth=0.1)+
-  geom_bar(data=x, fill="blue", binwidth=0.1)
+ggplot() + scale_y_continuous(breaks = scales::pretty_breaks(n = 10)) +
+  geom_bar(data=num_target_original_wo_splitting,
+           mapping=aes(fill=Cache.Type, y=Num.Calls, x=Benchmark),
+           position="fill", 
+           stat="identity",
+           width = 0.35) +
+  geom_bar(data=num_target_observed_wo_splitting_tp,
+           mapping=aes(fill=Cache.Type, y=Num.Calls, x=paste(Benchmark, "_TP", sep="")),
+           position="fill", 
+           stat="identity",
+           width = 0.35) +
+   theme(text = element_text(size=18), axis.text.x = element_text(angle = 70, hjust=1)) 
+  
 
 
 ################################################## Splitting

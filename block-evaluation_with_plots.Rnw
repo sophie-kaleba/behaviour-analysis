@@ -16,29 +16,15 @@ if (Sys.getenv("RSTUDIO") == "1") {
   options(device = function(...) tikzDevice::tikz(tempfile(), ...))
 }
 
-#install.packages("reshape2", repos='http://cran.us.r-project.org')
-#install.packages("htmlTable", repos='http://cran.us.r-project.org')
-#install.packages("networkD3", repos='http://cran.us.r-project.org')
-#install.packages("testit", repos='http://cran.us.r-project.org')
-library(reshape2)
-library(ggplot2)
-library(data.table)
-library(dplyr)
-library(stringr)
-library(xtable)
-library(htmlTable)
-library(networkD3)
-library(R.utils)
-library(assertr)
-library(testit)
-
-
 source("./scripts/libraries.R", chdir=TRUE)
-source("./scripts/paper.R", chdir=TRUE)
-source("./scripts/phase-data-processing.R", chdir=TRUE)
-source("./scripts/machine_specs.R", chdir=TRUE)
 
-data <- read_splitting_profiling_file(filename)
+data <- load_data_file("./results/NBody_Apr04-2022_13:24:26_all/parsed_NBody.mylog")
+benchmark_name <- "NBody"
+
+split_truffle <- read.csv("./truffle_split_targets_NBODY.split", sep=",", row.names = NULL, col.names=c("Target","Times.Splitted", "Call.Type"))  
+split_truffle <- split_truffle %>%
+    filter(Call.Type == "Block") %>%
+  janitor::adorn_totals("row") 
 
 ############################################## READ-ME ##############################################
 # INVARIANTS TO BE CHECKED
@@ -60,190 +46,51 @@ data <- read_splitting_profiling_file(filename)
 ############################################## MAIN TABLE ############################################## 
 
 # remove any invalid data (extra logging info ignored by parsing)
-# TODO - improve parser
-data <- data %>% 
-    dplyr::filter(!(Source.Section=="")) %>% 
-    dplyr::filter(Builtin. =="PROC" | Builtin. =="LAMBDA" ) %>%
-    tibble::rowid_to_column(var="Call.ID") %>%
-    dplyr::mutate(Observed.Receiver = str_trim(Observed.Receiver, side = "both")) %>%
-    dplyr::mutate(Symbol = str_trim(Symbol, side = "both")) 
-  
+data <- clean_data_file(data, TRUE)
 data$Symbol <- "yield|call|[]"
 
 # Add info on the number of call targets per call-site (taking splittng into account)
 # Add: Num.Receiver.Observed, Num.Receiver.Original
-total_w_splitting <- data %>%
-  group_by(Source.Section, CT.Address) %>%
-  dplyr::mutate(Num.Receiver.Observed = n_distinct(Observed.Receiver)) %>%
-  dplyr::mutate(Num.Receiver.Original = n_distinct(Original.Receiver)) %>%
-  verify(Num.Receiver.Observed == Num.Receiver.Original) %>% #there should not be any target polymoprhism for closures
-  dplyr::select(-Num.Receiver.Original, -Original.Receiver) %>%
-  ungroup() 
-
-total_wo_splitting <- data %>%
-  group_by(Source.Section, Symbol) %>%
-  dplyr::mutate(Num.Receiver.Observed = n_distinct(Observed.Receiver)) %>%
-  dplyr::mutate(Num.Receiver.Original = n_distinct(Original.Receiver)) %>%
-  verify(Num.Receiver.Observed == Num.Receiver.Original) %>% #there should not be any target polymoprhism for closures
-  dplyr::select(-Num.Receiver.Original, -Original.Receiver) %>%
-  # Invariant 3 cannot be verified in this case
-  ungroup() 
-
-prout <- data %>%
-  filter(Observed.Receiver == "block in Vector#each@1564629011") %>%
-  dplyr::mutate(n_distinct(Source.Section))
+# TODO - for now we distinguish by call target by default, so the 2 tables will be equal
+total_w_splitting <- add_number_receivers(data, Call.Site.Target)
+total_wo_splitting <- add_number_receivers(data, Call.Site)
 
 ############################################## VARIABLES ############################################## 
 # Mainly used for latex macro and checking invariants
 
-Num.Call.Sites <- n_distinct(data$Source.Section, data$Symbol) 
-Num.Call.Sites.Incl.Splitted <- n_distinct(data$Source.Section, data$Symbol, data$CT.Address) 
-Num.Targets.Observed <- n_distinct(total_w_splitting$Source.Section, total_w_splitting$Symbol, total_w_splitting$Num.Receiver.Observed) 
-assert("There should not be more call-sites than splitted call sites", Num.Call.Sites.Incl.Splitted >= Num.Call.Sites) 
+Num.Call.Sites <- count_things(data, Call.Site)
+Num.Call.Sites.Incl.Splitted <-count_things(data, Call.Site.Target)
+
+Num.Targets.Observed <- count_things(total_w_splitting, c(Call.Site.Target, "Num.Receiver.Observed"))
+testit::assert("There should not be more call-sites than splitted call sites", Num.Call.Sites.Incl.Splitted >= Num.Call.Sites) 
 
 ############################################## POLYMORPHISM ##############################################
 
-#' Return a data frame that summarises polymoprhic behaviour in this run
-# Add: Num.Call.Sites (the number of call-sites associated with a given number of receivers), Cumulative
-#' @param num_receiver_column, whether we consider the observed or the original number of receivers  
-#' @param ct_address, whether we consider splitting 
-compute_num_target <- function(df_p, num_receiver_column) {
-  df <- df_p %>%
-    select(Source.Section, Symbol, !! sym(num_receiver_column)) %>% 
-    group_by(Source.Section, Symbol) %>%
-    slice(1) %>% # at this point, we have a line per call-site
-    group_by(!! sym(num_receiver_column)) %>%
-    dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol)) %>%
-    select(!! sym(num_receiver_column), Num.Call.Sites) %>%
-    slice(1) %>% #just keep the first of each source section
-    mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites))))
-  return(df)
-}
-
-num_target_observed <- compute_num_target(total_wo_splitting, "Num.Receiver.Observed")
-assert("... And it should match the total number of call-sites", first(num_target_observed$Cumulative) == Num.Call.Sites)
-
-#' Return a data frame that summarises polymoprhic behaviour in this run, takes splitting into account
-# Add: Num.Call.Sites (the number of call-sites associated with a given number of receivers), Cumulative
-#' @param num_receiver_column, whether we consider the observed or the original number of receivers  
-#' @param ct_address, whether we consider splitting 
-compute_num_target_splitting <- function(df_p, num_receiver_column) {
-  df <- df_p %>%
-    select(Source.Section, Symbol, CT.Address, !! sym(num_receiver_column), Call.ID) %>% 
-    group_by(Source.Section, Symbol, CT.Address) %>%
-    dplyr::mutate(Num.Calls = n_distinct(Call.ID)) %>%
-    dplyr::mutate(Frequency = round(Num.Calls/nrow(data),7)*100) %>%
-    slice(1) %>% # at this point, we have a line per call-site
-    group_by(!! sym(num_receiver_column)) %>%
-    dplyr::mutate("Num.Calls.Total" = sum(Num.Calls)) %>%
-    dplyr::mutate("Frequency.Total" = sum(Frequency)) %>%
-    dplyr::mutate("Num.Call.Sites" = n_distinct(Source.Section, Symbol, CT.Address)) %>%
-    select(!! sym(num_receiver_column), Num.Call.Sites, Frequency.Total, Num.Calls.Total) %>%
-    slice(1) %>% #just keep the first of each source section
-    mutate(Cumulative = rev(cumsum(rev(Num.Call.Sites)))) %>%
-    mutate(Cumulative.Freq = rev(cumsum(rev(Frequency.Total)))) 
-  df <- df[, c(1, 2, 5, 4, 3, 6)] #reorganize columns
-  return(df)
-}
-
-num_target_observed_w_splitting <- compute_num_target_splitting(total_w_splitting, "Num.Receiver.Observed")
-assert("... And it should match the total number of call-sites", first(num_target_observed_w_splitting$Cumulative) == Num.Call.Sites.Incl.Splitted)
-
-# Add the cache type for each call-site
-total_w_splitting <- total_w_splitting %>%
-  ungroup() %>%
-  group_by(Source.Section, Symbol, CT.Address) %>%
-  dplyr::mutate(Cache.Type.Observed = case_when(Num.Receiver.Observed == 1 ~ "MONO",
-                                       Num.Receiver.Observed > 1 && Num.Receiver.Observed <= 8 ~ "POLY",
-                                       Num.Receiver.Observed > 8 ~ "MEGA")) 
-
-total_wo_splitting <- total_wo_splitting %>%
-  ungroup() %>%
-  group_by(Source.Section, Symbol) %>%
-  dplyr::mutate(Cache.Type.Observed = case_when(Num.Receiver.Observed == 1 ~ "MONO",
-                                       Num.Receiver.Observed > 1 && Num.Receiver.Observed <= 8 ~ "POLY",
-                                       Num.Receiver.Observed > 8 ~ "MEGA")) 
+num_target_observed <- compute_num_target_details(total_wo_splitting, Call.Site, "Observed.Receiver")
+num_target_observed_w_splitting <- compute_num_target_details(total_w_splitting, Call.Site.Target,  "Observed.Receiver")
+total_w_splitting <- add_lookup_status_per_call(total_w_splitting)
 
 ############################################## SPLITTING ##############################################    
 
-# Provide a list of splitted-call sites
-# Add: Times.Splitted, the number of times a call-site has been splitted
-generate_splitting_summary <- function(data, ...) {
-  df <- data %>%
-    select(...) %>%
-    group_by(Source.Section, Symbol) %>%
-    dplyr::mutate(Times.splitted = n_distinct(CT.Address) - 1) %>%  # -1 otherwise we count the call-sites that have one call target (ie not splitted)
-    dplyr::filter(Times.splitted > 0)
-  return(df)
-}
+summary_splitting <- generate_splitting_summary(total_w_splitting, c(Call.Site.Target, "Call.ID", "Observed.Receiver"), Call.Site) %>%
+  dplyr::arrange(desc(Frequency)) %>%
+  tibble::rowid_to_column(var="Rank")
 
-summary_splitting <- generate_splitting_summary(total_w_splitting, c("Source.Section", "Symbol", "CT.Address")) %>%
-  select(-CT.Address) %>%
-  slice(1) %>%
-  dplyr::arrange(desc(Times.splitted)) 
+num_calls_splitted <- total_w_splitting %>%
+  group_by_at(Call.Site) %>%
+  dplyr::mutate(Times.Splitted = n_distinct(CT.Address) - 1) %>%
+  filter(Times.Splitted > 0)
 
-col <- c("Source.Section", "Symbol", "CT.Address", "Observed.Receiver", "Num.Receiver.Observed")
-summary_splitting_detail_turbo <- generate_splitting_summary(total_w_splitting, all_of(col)) %>%
-  group_by(Source.Section, Symbol, CT.Address) %>%
-  slice(1) %>%
-  dplyr::arrange(desc(Times.splitted)) 
+Num.Splitted.Call.Sites <- count_things(num_calls_splitted, Call.Site)
 
-# Was splitting useful? State of lookup cache after splitting
-effect_splitting <- total_w_splitting %>%
-  group_by(Source.Section, Symbol) %>%
-  dplyr::mutate(Times.splitted = n_distinct(CT.Address) - 1) %>%  # -1 otherwise we count the call-sites that have one call target (ie not splitted)
-  dplyr::filter(Times.splitted > 0) %>%
-  dplyr::filter(Source.Section != "(core):1:1:0" && Source.Section != "(unavailable):1:1:0") %>%
-  ungroup %>%
-  group_by(Source.Section, Symbol, CT.Address) %>%
-  dplyr::arrange(.by_group = TRUE) %>%
-  filter(row_number() == 1  ) %>%  #keep first and last of each group, this way we can sort 
-  dplyr::arrange(Source.Section, Symbol, Call.ID) 
+transition_data <- analyse_splitting_transitions(total_w_splitting, benchmark_name, Call.Site, Call.Site.Target)
 
-# for each group {Source.Section, Symbol}
-#     order each subgroup {CT.Address} against one another, and give them a rank
-#     then compare each subgroup with its n-1 and n+1 and check the evolution of their cache
+Number.Splits <- nrow(transition_data)
+splitting_transition_summary_sites <- summarise_transition_targets(transition_data)
+splitting_transition_summary_sites_real <- summarise_transition_sites(transition_data)
+# get frequency according to number of splits
+splitting_transition_summary_frequency <- summarise_transition_frequency(transition_data, Number.Splits)
 
-effect_splitting <- effect_splitting %>%
-  group_by(Source.Section, Symbol) %>%
-  dplyr::mutate(Group.ID = cur_group_id()) %>%
-  ungroup() %>%
-  group_by(Source.Section, Symbol, CT.Address) %>%
-  dplyr::mutate(Sub.Group.ID = cur_group_id()) %>%
-  dplyr::arrange(Sub.Group.ID, Call.ID) 
-
-effect_splitting <- effect_splitting %>%
-    ungroup %>%
-    group_by(Group.ID) %>%
-    dplyr::filter(any(Cache.Type.Observed== 'POLY')) %>%
-    group_by(Group.ID, Sub.Group.ID) %>%
-    dplyr::arrange(Group.ID, Call.ID, Sub.Group.ID) %>%
-    ungroup() %>%
-    dplyr::select(Call.ID, Symbol, Source.Section, CT.Address, Cache.Type.Observed, Group.ID, Sub.Group.ID) 
-
-# After many convoluted moves, this table is the one 
-# TODO - This is NOT taking into account different set of receivers, but it should
-effect_splitting <- effect_splitting %>%
-  ungroup() %>%
-  dplyr::arrange(Source.Section, Symbol, Call.ID) %>%
-  group_by(Source.Section, Symbol) %>%
-  dplyr::mutate(prev=dplyr::lag(Cache.Type.Observed)) %>%
-  dplyr::mutate(Splitting.Effect = case_when(is.na(prev) ~ 0,
-                                             prev == 'POLY' & Cache.Type.Observed == 'MONO' ~ 0,
-                                             prev == 'MEGA' & Cache.Type.Observed == 'MONO' ~ 0, 
-                                             prev == 'MEGA' & Cache.Type.Observed == 'POLY' ~ 0,
-                                             prev == Cache.Type.Observed ~ 0,
-                                             prev == 'MONO' & Cache.Type.Observed == 'POLY' ~ 1,
-                                             prev == 'MONO' & Cache.Type.Observed == 'MEGA' ~ 1,
-                                             prev == 'POLY' & Cache.Type.Observed == 'MEGA' ~ 1) )    
-
-# Summarises the splitting behaviour
-# Check each splitting transition
-effect_splitting_summary <- effect_splitting %>%
-  ungroup() %>%
-  group_by(prev, Cache.Type.Observed) %>%
-  dplyr::summarise(n())
-  
 ############################################## MANUAL INSPECTION ############################################## 
 
 # to filter out by the number of targets and only keep polymoprhic call-sites 
@@ -315,33 +162,6 @@ if (nrow(polymorphic_call_sites) != 0) {
 
 # this folder is now hlding the latest ran analysis
 createLink(link="latest", target=now, overwrite=TRUE)
-
-############################################## PLOT GENERATION - ##############################################
-
-# plot_calls_sub <- function(ss, symb) {
-#   filtered_data <- polymorphic_call_sites %>% filter(Source.Section == ss)
-#   dir_name = paste(now,paste(symb,gsub("*/","_",ss),sep="_"),sep="/")
-#   dir.create(dir_name)
-#   for (addr in unique(filtered_data$CT.Address)) {
-#     filtered_data_addr <- polymorphic_call_sites %>% filter(Source.Section == ss) %>% filter(CT.Address == addr) 
-#     p <- ggplot(data = filtered_data_addr, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, color=Observed.Receiver)) + geom_point(size = 0.5, alpha = 0.4) 
-#     p <- p  + xlab("Call ID") + ylab("Target") + theme(legend.position = "none") + ggtitle(paste("Selector: ",filtered_data_addr$Symbol, ", in source: ", filtered_data_addr$Source.Section))
-#     p <- p + theme(text = element_text(size=15)) 
-#     ss <- gsub("*/","_",ss)
-#     ggsave(p, path=dir_name, filename=paste(addr,ss,"plot.png", sep="_"), height = 300, width = 500, units="mm")
-#   }
-#   return (ss)
-# }
-# 
-# f_subdir <- function(row) {
-#   ss <- row['Source.Section']
-#   symb <- row['Symbol']
-#   rec <- row['Observed.Receiver']
-#   rank <- row['Rank']
-#   o <- plot_calls_sub(ss, symb)
-# }
-# 
-# apply(head(table_optimizable,30), 1, f_subdir) 
 
 ############################################## TABLES ###############################################    
 

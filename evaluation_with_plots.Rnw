@@ -17,8 +17,13 @@ if (Sys.getenv("RSTUDIO") == "1") {
 }
 
 source("./scripts/libraries.R", chdir=TRUE)
-
+  
 data <- load_data_file(filename)
+#benchmark_name <- "db"
+
+# split_truffle <- read.csv("./truffle_split_targets_toto", sep=",", row.names = NULL, col.names=c("Target","Times.Splitted", "Call.Type"))
+# split_truffle <- split_truffle %>%
+#     filter(Call.Type == "Block")
 
 ############################################## READ-ME ##############################################
 # INVARIANTS TO BE CHECKED
@@ -90,8 +95,9 @@ summary_tp <- merge(has_experienced_tp(total_w_splitting), summary_tp, by = "Val
 # at the granularity of cache size
 summary_cache_change_detail <- build_detailed_summary_tp(total_w_splitting)
   
-############################################## SPLITTING ##############################################    
-summary_splitting <- generate_splitting_summary(total_w_splitting, c(Call.Site.Target, "Call.ID", "Observed.Receiver")) %>%
+############################################## SPLITTING ##############################################   
+
+summary_splitting <- generate_splitting_summary(total_w_splitting, c(Call.Site.Target, "Call.ID", "Observed.Receiver"), Call.Site) %>%
   dplyr::arrange(desc(Frequency)) %>%
   tibble::rowid_to_column(var="Rank")
 
@@ -102,10 +108,12 @@ num_calls_splitted <- total_w_splitting %>%
 
 Num.Splitted.Call.Sites <- count_things(num_calls_splitted, Call.Site)
 
-transition_data <- analyse_splitting_transitions(total_w_splitting, benchmark_name)
+transition_data <- analyse_splitting_transitions(total_w_splitting, benchmark_name, Call.Site, Call.Site.Target)
+mono <- transition_data %>% filter(Start.State == 'MONOMORPHIC' & End.State == 'MONOMORPHIC')
 
 Number.Splits <- nrow(transition_data)
-splitting_transition_summary_sites <- summarise_transition_sites(transition_data)
+splitting_transition_summary_sites <- summarise_transition_targets(transition_data)
+splitting_transition_summary_sites_real <- summarise_transition_sites(transition_data)
 # get frequency according to number of splits
 splitting_transition_summary_frequency <- summarise_transition_frequency(transition_data, Number.Splits)
   
@@ -168,7 +176,7 @@ f <- function(row) {
 
 # create the directory
 now <- format(Sys.time(), "%b%d-%Y_%X")
-now <- paste("results",paste(benchmark_name,now,sep="_"),sep="/")
+now <- paste("results",folder_out,paste(benchmark_name,now,sep="_"),sep="/")
 dir.create(now)
 
 # 1 line in the table_optimizable corresponds to the most executed observed receiver per target
@@ -259,6 +267,9 @@ splitting_table <- autoformat(splitting_table, zap = getOption("digits"))
 effect_splitting_sites_table <- xtable(splitting_transition_summary_sites, type = "latex")
 effect_splitting_sites_table <- autoformat(effect_splitting_sites_table, zap = getOption("digits"))
 
+effect_splitting_sites_real_table <- xtable(splitting_transition_summary_sites_real, type = "latex")
+effect_splitting_sites_real_table <- autoformat(effect_splitting_sites_real_table, zap = getOption("digits"))
+
 effect_splitting_frequency_table <- xtable(splitting_transition_summary_frequency, type = "latex")
 effect_splitting_frequency_table <- autoformat(effect_splitting_frequency_table, zap = getOption("digits"))
 # TODO
@@ -324,6 +335,12 @@ print(effect_splitting_sites_table, include.rownames=FALSE, tabular.environment=
       @
   }%
   
+  \def\EffectSplittingSitesReal{%
+<<EffectSplittingSitesReal, echo=FALSE, results='asis'>>=
+print(effect_splitting_sites_real_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
+      @
+  }%
+  
   \def\EffectSplittingFrequency{%
 <<EffectSplittingFrequency, echo=FALSE, results='asis'>>=
 print(effect_splitting_frequency_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
@@ -354,6 +371,7 @@ print(xtable(most_executed, type = "latex"), include.rownames=TRUE, tabular.envi
 \newcommand{\LogFilename}{\Sexpr{filename}\xspace}
 \newcommand{\Hihaho}{\Sexpr{hihaho}\xspace}
 \newcommand{\Yuria}{\Sexpr{yuria}\xspace}
+\newcommand{\Flags}{$\Sexpr{flags_cmd}$\xspace}
 
 \newcommand{\NumberCallSites}{$\Sexpr{Num.Call.Sites}$\xspace}
 \newcommand{\NumberCallSitesSplitting}{$\Sexpr{Num.Call.Sites.Incl.Splitted}$\xspace}
