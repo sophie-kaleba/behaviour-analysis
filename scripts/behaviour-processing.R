@@ -1,6 +1,9 @@
 Call.Site.Target <- c("Source.Section", "Symbol", "CT.Address")
 Call.Site <- c("Source.Section", "Symbol")
 
+Block.Call.Site.Target <- c("Observed.Receiver", "CT.Address")
+Block.Call.Site <- c("Observed.Receiver")
+
 load_all_data <- function (folder, keep_blocks) { 
   result <- NULL
   files <- sort(list.files(folder))
