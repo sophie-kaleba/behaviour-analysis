@@ -22,168 +22,124 @@ data <- load_data_file("./results/AsciidoctorConvertSmall_Apr26-2022_11:32:52/pa
 data <- as_tibble(data)
 benchmark_name <- "asci"
 
+############################################## MAIN TABLE ############################################## 
+# remove any invalid data (extra logging info ignored by parsing)
+data <- clean_data_file(data, FALSE)
 
-row_names <- c("Benchmark", "Before", "After", "Variation")
-sdljfskdf <- t(read.csv("asci-split_call_sites_mega.csv", sep="\n", strip.white = TRUE, header = FALSE, row.names = rpw_names))
+# Add info on the number of call targets per call-site (taking splittng into account)
+# Add: Num.Receiver.Observed, Num.Receiver.Original
+total_w_splitting <- add_number_receivers(data, Call.Site.Target)
+total_wo_splitting <- add_number_receivers(data, Call.Site)
+# Table summarizing the amount of call sites being mono, poly, mega
+total_w_splitting <- add_number_receivers(data, c(Call.Site.Target, "Benchmark"))
+total_wo_splitting <- add_number_receivers(data, c(Call.Site, "Benchmark"))
 
+num_target_observed_wo_splitting_tp <- compute_num_target_details(total_wo_splitting, Call.Site,  "Observed.Receiver")
+num_target_original_wo_splitting <- compute_num_target_details(total_wo_splitting, Call.Site,  "Original.Receiver")
+num_target_observed_w_splitting_tp <- compute_num_target_details(total_w_splitting, Call.Site.Target,  "Observed.Receiver")
 
+cache_status_sites <- create_aggregate_table(num_target_observed_w_splitting_tp, c("Benchmark", "Num.Receiver", "Num.Call.Sites"),"Num.Receiver", "Num.Call.Sites")
+cache_status_calls <- head(create_aggregate_table(num_target_observed_w_splitting_tp, c("Benchmark", "Num.Receiver", "Frequency"),"Num.Receiver", "Frequency"), -1)
 
-############################################## TABLES ###############################################    
+total_w_splitting <- add_lookup_status_per_call(total_w_splitting)
 
-## TABLE GENERATION
-# Distribution of call targets
-distrib_cache_size_obs_no_splitting <- xtable(num_target_observed, caption = "Distribution of call-targets (Observed) - Splitting ignored")
-distrib_cache_size_obs_no_splitting <- autoformat(distrib_cache_size_obs_no_splitting, zap = getOption("digits"))
+############################################## AGGREGATED STATISTICS ###############################################   
+compute_cache_status <- function(df, num_entries) {
+  return (which(rownames(df) == num_entries))
+}
 
-distrib_cache_size_original_no_splitting <- xtable(num_target_original, caption = "Distribution of call-targets (Original) - Splitting ignored")
-distrib_cache_size_original_no_splitting <- autoformat(distrib_cache_size_original_no_splitting, zap = getOption("digits"))
+compute_amount_calls_sites <- function(df, call_or_site) {
+  return (which(colnames(df) == call_or_site))
+}
 
-distrib_cache_size_obs_splitting <- xtable(num_target_observed_w_splitting, caption = "Distribution of call-targets (Observed) - Splitting acknowledged")
-distrib_cache_size_obs_splitting <- autoformat(distrib_cache_size_obs_splitting, zap = getOption("digits"))
+compute_before_after <- function(df, cache_status_int, call_or_site) {
+  if (cache_status_int == 2) {
+    d <- df %>%
+      filter(Num.Receiver >= 2 & Num.Receiver <= 8) %>%
+      dplyr::summarise(Sum=sum(!! sym(call_or_site)))
+    return (d$Sum)
+  }
+  cache_status <- compute_cache_status(df, cache_status_int)
+  row_call_site <- compute_amount_calls_sites(df, call_or_site)
+  return ( df[cache_status,row_call_site][[call_or_site]] )
+}
 
-distrib_cache_size_original_splitting <- xtable(num_target_original_w_splitting, caption = "Distribution of call-targets (Original) - Splitting acknowledged")
-distrib_cache_size_original_splitting <- autoformat(distrib_cache_size_original_splitting, zap = getOption("digits"))
+compute_evolution <- function(before, after) {
+  return (((after - before) / before) * 100)
+}
 
-# Target polymorphism
-target_polymorphism <-  xtable(summary_tp, caption = "Distribution of call-targets (Observed) - Splitting ignored")
-target_polymorphism <- autoformat(target_polymorphism, zap = getOption("digits"))
+write_on_disk <- function(df, name, path = "") {
+ write.table(df,paste(benchmark_name, name,".csv",sep="-"), col.names = FALSE, row.names = FALSE) 
+}
 
-target_polymorphism_detail <- xtable(summary_cache_change_detail, caption = "Distribution of call-targets (Observed) - Splitting ignored")
-target_polymorphism_detail <- autoformat(target_polymorphism_detail, zap = getOption("digits"))
+# Target polymorphism - calls
+before <- compute_before_after(num_target_original_wo_splitting, 1, "Num.Calls")
+after <- compute_before_after(num_target_observed_wo_splitting_tp, 1, "Num.Calls")
+tp_calls_mono <- c(benchmark_name, before, after, compute_evolution(before, after))
 
-# Hottest call-sites
-hottest_mega_ct_table <- xtable(table_optimizable, caption = "Hottest megamorphic call sites")
-hottest_mega_ct_table <- autoformat(hottest_mega_ct_table, zap = getOption("digits"))
+before <- compute_before_after(num_target_original_wo_splitting, 2, "Num.Calls")
+after <- compute_before_after(num_target_observed_wo_splitting_tp, 2, "Num.Calls")
+tp_calls_poly <- c(benchmark_name, before, after, compute_evolution(before, after))
 
-hottest_30mega_ct_table <- xtable(head(table_optimizable,30), caption = "Hottest megamorphic call sites")
-hottest_30mega_ct_table <- autoformat(hottest_30mega_ct_table, zap = getOption("digits"))
+before <- compute_before_after(num_target_original_wo_splitting, 9, "Cumulative.Calls")
+after <- compute_before_after(num_target_observed_wo_splitting_tp, 9, "Cumulative.Calls")
+tp_calls_mega <- c(benchmark_name, before, after, compute_evolution(before, after))
 
-most_executed <- xtable(head(most_executed  %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='left'), 35), caption = "Most executed call-sites")
-most_executed <- autoformat(most_executed, zap = getOption("digits"))
+# Target polymoprhism - call sites
+before <- compute_before_after(num_target_original_wo_splitting, 1, "Num.Call.Sites")
+after <- compute_before_after(num_target_observed_wo_splitting_tp, 1, "Num.Call.Sites")
+tp_call_sites_mono <- c(benchmark_name, before, after, compute_evolution(before, after))
 
-# Splitting 
-splitting_table <- xtable(head(summary_splitting %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='left'), 30), type = "latex")
-splitting_table <- autoformat(splitting_table, zap = getOption("digits"))
+before <- compute_before_after(num_target_original_wo_splitting, 2, "Num.Call.Sites")
+after <- compute_before_after(num_target_observed_wo_splitting_tp, 2, "Num.Call.Sites")
+tp_call_sites_poly <- c(benchmark_name, before, after, compute_evolution(before, after))
 
-effect_splitting_sites_table <- xtable(splitting_transition_summary_sites, type = "latex")
-effect_splitting_sites_table <- autoformat(effect_splitting_sites_table, zap = getOption("digits"))
+before <- compute_before_after(num_target_original_wo_splitting, 9, "Cumulative.Call.Sites")
+after <- compute_before_after(num_target_observed_wo_splitting_tp, 9, "Cumulative.Call.Sites")
+tp_call_sites_mega <- c(benchmark_name, before, after, compute_evolution(before, after))
 
-effect_splitting_sites_real_table <- xtable(splitting_transition_summary_sites_real, type = "latex")
-effect_splitting_sites_real_table <- autoformat(effect_splitting_sites_real_table, zap = getOption("digits"))
+# Splitting - calls
+before <- compute_before_after(num_target_observed_wo_splitting_tp, 1, "Num.Calls")
+after <- compute_before_after(num_target_observed_w_splitting_tp, 1, "Num.Calls")
+split_calls_mono <- c(benchmark_name, before, after, compute_evolution(before, after))
 
-effect_splitting_frequency_table <- xtable(splitting_transition_summary_frequency, type = "latex")
-effect_splitting_frequency_table <- autoformat(effect_splitting_frequency_table, zap = getOption("digits"))
-# TODO
-distrib_split_per_ct_table <- xtable(summary_splitting, caption = "Distribution of splits per target")
-distrib_split_per_ct_table <- autoformat(distrib_split_per_ct_table, zap = getOption("digits"))
+before <- compute_before_after(num_target_observed_wo_splitting_tp, 2, "Num.Calls")
+after <- compute_before_after(num_target_observed_w_splitting_tp, 2, "Num.Calls")
+split_calls_poly <- c(benchmark_name, before, after, compute_evolution(before, after))
 
-## TABLE SAVING
-table_folder <- paste(now,"summary_tables",sep="/")
-dir.create(table_folder)
-print(xtable(distrib_cache_size_obs_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"call_target_distrib.tex", sep="/"))
-print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE, file = paste(table_folder,"hottest_megamorphic_call_sites.tex", sep="/"))
-print(xtable(distrib_split_per_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"splits_per_target.tex", sep="/"))
-print(xtable(summary_splitting %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='left'), type = "latex"), include.rownames=FALSE, tabular.environment="longtable", floating=FALSE,  file = paste(table_folder,"splitting_details.tex", sep="/"))
+before <- compute_before_after(num_target_observed_wo_splitting_tp, 9, "Cumulative.Calls")
+after <- compute_before_after(num_target_observed_w_splitting_tp, 9, "Cumulative.Calls")
+split_calls_mega <- c(benchmark_name, before, after, compute_evolution(before, after))
 
-############################################## LATEX COMMAND GENERATION ##############################################
+# Splitting - call-sites
+before <- compute_before_after(num_target_observed_wo_splitting_tp, 1, "Num.Call.Sites")
+after <- compute_before_after(num_target_observed_w_splitting_tp, 1, "Num.Call.Sites")
+split_call_sites_mono <- c(benchmark_name, before, after, compute_evolution(before, after))
 
-@
-\def\CacheDistribObservedSplitting{%
-<<CacheDistribObservedSplitting, echo=FALSE, results='asis'>>=
-print(xtable(distrib_cache_size_obs_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
-  @
-  }%
-  
-\def\CacheDistribOriginalSplitting{%
-<<CacheDistribOriginalSplitting, echo=FALSE, results='asis'>>=
-print(xtable(distrib_cache_size_original_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
-  @
-  }%
+before <- compute_before_after(num_target_observed_wo_splitting_tp, 2, "Num.Call.Sites")
+after <- compute_before_after(num_target_observed_w_splitting_tp, 2, "Num.Call.Sites")
+split_call_sites_poly <- c(benchmark_name, before, after, compute_evolution(before, after))
 
-\def\CacheDistribObservedNoSplitting{%
-<<CacheDistribObservedNoSplitting, echo=FALSE, results='asis'>>=
-print(xtable(distrib_cache_size_obs_no_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
-  @
-  }%
-  
-\def\CacheDistribOriginalNoSplitting{%
-<<CacheDistribOriginalNoSplitting, echo=FALSE, results='asis'>>=
-print(xtable(distrib_cache_size_original_no_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
-  @
-  }%
-  
-\def\TargetPolymorphism{%
-<<TargetPolymorphism, echo=FALSE, results='asis'>>=
-print(xtable(target_polymorphism, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
-  @
-  }%
-  
-\def\TargetPolymorphismDetails{%
-<<TargetPolymorphismDetails, echo=FALSE, results='asis'>>=
-print(xtable(target_polymorphism_detail, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
-  @
-  }%
+before <- compute_before_after(num_target_observed_wo_splitting_tp, 9, "Cumulative.Call.Sites")
+after <- compute_before_after(num_target_observed_w_splitting_tp, 9, "Cumulative.Call.Sites")
+# it augmented by x%
+split_call_sites_mega <- c(benchmark_name, before, after, compute_evolution(before, after))
 
-\def\Splitting{%
-<<Splitting, echo=FALSE, results='asis'>>=
-print(splitting_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
-      @
-  }%
-  
-  \def\EffectSplittingSites{%
-<<EffectSplittingSites, echo=FALSE, results='asis'>>=
-print(effect_splitting_sites_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
-      @
-  }%
-  
-  \def\EffectSplittingSitesReal{%
-<<EffectSplittingSitesReal, echo=FALSE, results='asis'>>=
-print(effect_splitting_sites_real_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
-      @
-  }%
-  
-  \def\EffectSplittingFrequency{%
-<<EffectSplittingFrequency, echo=FALSE, results='asis'>>=
-print(effect_splitting_frequency_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
-      @
-  }%
+############################################## SAVE AS CSV ###############################################  
+write_on_disk(tp_calls_mono, "tp_calls_mono")
+write_on_disk(tp_calls_poly, "tp_calls_poly")
+write_on_disk(tp_calls_mega, "tp_calls_mega")
 
-  \def\HottestMegamorphic{%
-<<HottestMegamorphic, echo=FALSE, results='asis'>>=
-print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE)
-    @
-  }%
-  
-  \def\SuperHottestMegamorphic{%
-<<SuperHottestMegamorphic, echo=FALSE, results='asis'>>=
-print(xtable(hottest_30mega_ct_table, type = "latex"), include.rownames=FALSE)
-    @
-  }%
-  
-  \def\MostExecutedCallSite{%
-<<MostExecutedCallSite, echo=FALSE, results='asis'>>=
-print(xtable(most_executed, type = "latex"), include.rownames=TRUE, tabular.environment="longtable",floating=FALSE)
-      @
-  }%
-  
-\newcommand{\BenchmarkName}{$\Sexpr{benchmark_name}$\xspace}
-\newcommand{\NumIterations}{$\Sexpr{number_iterations}$\xspace}
-\newcommand{\NumInnerIterations}{$\Sexpr{number_inner_iterations}$\xspace}
-\newcommand{\LogFilename}{\Sexpr{filename}\xspace}
-\newcommand{\Hihaho}{\Sexpr{hihaho}\xspace}
-\newcommand{\Yuria}{\Sexpr{yuria}\xspace}
-\newcommand{\Flags}{$\Sexpr{flags_cmd}$\xspace}
+write_on_disk(tp_call_sites_mono, "tp_call_sites_mono")
+write_on_disk(tp_call_sites_poly, "tp_call_sites_poly")
+write_on_disk(tp_call_sites_mega, "tp_call_sites_mega")
 
-\newcommand{\NumberCallSites}{$\Sexpr{Num.Call.Sites}$\xspace}
-\newcommand{\NumberCallSitesSplitting}{$\Sexpr{Num.Call.Sites.Incl.Splitted}$\xspace}
-\newcommand{\NumberTargetsOriginal}{$\Sexpr{Num.Targets.Original}$\xspace}
-\newcommand{\NumberTargetsObserved}{$\Sexpr{Num.Targets.Observed}$\xspace}
+write_on_disk(split_calls_mono, "split_calls_mono")
+write_on_disk(split_calls_poly, "split_calls_poly")
+write_on_disk(split_calls_mega, "split_calls_mega")
 
-\newcommand{\NumberCalls}{$\Sexpr{nrow(data)}$\xspace}
-\newcommand{\NumOfSplittedTargets}{$\Sexpr{nrow(summary_splitting)}$\xspace}
-\newcommand{\NumsOfSplits}{$\Sexpr{Number.Splits}$\xspace}
-
-
-
+write_on_disk(split_call_sites_mono, "split_call_site_mono")
+write_on_disk(split_call_sites_poly, "split_call_site_poly")
+write_on_disk(split_call_sites_mega, "split_call_site_mega")
 
 
