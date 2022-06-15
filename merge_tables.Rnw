@@ -40,14 +40,6 @@ load_all_tables <- function (folder, type, call_or_site) {
   return(result)
 }
 
-############################################## MERGED TABLES ############################################### 
-
-data_tp_calls <- load_all_tables(folder_out, "TP", "Calls")
-data_tp_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
-
-data_split_calls <- load_all_tables(folder_out, "Split", "Calls")
-data_split_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
-
 rearrange_table <- function(df) {
  spec <- tidyr::build_wider_spec(
   df, 
@@ -61,78 +53,39 @@ rearrange_table <- function(df) {
   return(tidyr::pivot_wider_spec(df, spec))
 }
 
+build_nice_latex_table <- function(df) {
+# trash the data BUT looks exactly how it should for the paper
+# see https://stackoverflow.com/questions/13984470/possible-to-create-latex-multicolumns-in-xtable/28420723#28420723
+names(df)[2] = names(df)[5] = names(df)[8] = "Before"
+names(df)[3] = names(df)[6] = names(df)[9] = "After"
+names(df)[4] = names(df)[7] = names(df)[10] = "Variation"
+beauty <- kableExtra::kable(df, booktabs = TRUE) %>%
+  kableExtra::add_header_above(c("", "MONO"=3, "POLY"=3, "MEGA"=3)) %>%
+  kableExtra::kable_styling(latex_options = "hold_position")
+return(beauty)
+}
+
+############################################## MERGED TABLES ############################################### 
+
+data_tp_calls <- load_all_tables(folder_out, "TP", "Calls")
+data_tp_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
+
+data_split_calls <- load_all_tables(folder_out, "Split", "Calls")
+data_split_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
+
+# and rearranged
 table_data_tp_calls <- rearrange_table(data_tp_calls)
 table_data_tp_call_sites <- rearrange_table(data_tp_call_sites)
 
 table_data_split_calls <- rearrange_table(data_split_calls)
 table_data_split_call_sites <- rearrange_table(data_split_call_sites)
 
+# and all latexed
+latex_tp_calls <- build_nice_latex_table(table_data_tp_calls)
+latex_tp_call_sites <- build_nice_latex_table(table_data_tp_call_sites)
 
-
-
-
-
-tabular((Species + 1) ~ (n=1) + Format(digits=2)*(Sepal.Length + Sepal.Width)*(mean + sd), data = iris)
-
-
-
-
-
-
-## TABLE GENERATION
-# Distribution of call targets
-distrib_cache_size_obs_no_splitting <- xtable(num_target_observed, caption = "Distribution of call-targets (Observed) - Splitting ignored")
-distrib_cache_size_obs_no_splitting <- autoformat(distrib_cache_size_obs_no_splitting, zap = getOption("digits"))
-
-distrib_cache_size_original_no_splitting <- xtable(num_target_original, caption = "Distribution of call-targets (Original) - Splitting ignored")
-distrib_cache_size_original_no_splitting <- autoformat(distrib_cache_size_original_no_splitting, zap = getOption("digits"))
-
-distrib_cache_size_obs_splitting <- xtable(num_target_observed_w_splitting, caption = "Distribution of call-targets (Observed) - Splitting acknowledged")
-distrib_cache_size_obs_splitting <- autoformat(distrib_cache_size_obs_splitting, zap = getOption("digits"))
-
-distrib_cache_size_original_splitting <- xtable(num_target_original_w_splitting, caption = "Distribution of call-targets (Original) - Splitting acknowledged")
-distrib_cache_size_original_splitting <- autoformat(distrib_cache_size_original_splitting, zap = getOption("digits"))
-
-# Target polymorphism
-target_polymorphism <-  xtable(summary_tp, caption = "Distribution of call-targets (Observed) - Splitting ignored")
-target_polymorphism <- autoformat(target_polymorphism, zap = getOption("digits"))
-
-target_polymorphism_detail <- xtable(summary_cache_change_detail, caption = "Distribution of call-targets (Observed) - Splitting ignored")
-target_polymorphism_detail <- autoformat(target_polymorphism_detail, zap = getOption("digits"))
-
-# Hottest call-sites
-hottest_mega_ct_table <- xtable(table_optimizable, caption = "Hottest megamorphic call sites")
-hottest_mega_ct_table <- autoformat(hottest_mega_ct_table, zap = getOption("digits"))
-
-hottest_30mega_ct_table <- xtable(head(table_optimizable,30), caption = "Hottest megamorphic call sites")
-hottest_30mega_ct_table <- autoformat(hottest_30mega_ct_table, zap = getOption("digits"))
-
-most_executed <- xtable(head(most_executed  %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='left'), 35), caption = "Most executed call-sites")
-most_executed <- autoformat(most_executed, zap = getOption("digits"))
-
-# Splitting 
-splitting_table <- xtable(head(summary_splitting %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='left'), 30), type = "latex")
-splitting_table <- autoformat(splitting_table, zap = getOption("digits"))
-
-effect_splitting_sites_table <- xtable(splitting_transition_summary_sites, type = "latex")
-effect_splitting_sites_table <- autoformat(effect_splitting_sites_table, zap = getOption("digits"))
-
-effect_splitting_sites_real_table <- xtable(splitting_transition_summary_sites_real, type = "latex")
-effect_splitting_sites_real_table <- autoformat(effect_splitting_sites_real_table, zap = getOption("digits"))
-
-effect_splitting_frequency_table <- xtable(splitting_transition_summary_frequency, type = "latex")
-effect_splitting_frequency_table <- autoformat(effect_splitting_frequency_table, zap = getOption("digits"))
-# TODO
-distrib_split_per_ct_table <- xtable(summary_splitting, caption = "Distribution of splits per target")
-distrib_split_per_ct_table <- autoformat(distrib_split_per_ct_table, zap = getOption("digits"))
-
-## TABLE SAVING
-table_folder <- paste(now,"summary_tables",sep="/")
-dir.create(table_folder)
-print(xtable(distrib_cache_size_obs_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"call_target_distrib.tex", sep="/"))
-print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE, file = paste(table_folder,"hottest_megamorphic_call_sites.tex", sep="/"))
-print(xtable(distrib_split_per_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"splits_per_target.tex", sep="/"))
-print(xtable(summary_splitting %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='left'), type = "latex"), include.rownames=FALSE, tabular.environment="longtable", floating=FALSE,  file = paste(table_folder,"splitting_details.tex", sep="/"))
+latex_split_calls <- build_nice_latex_table(table_data_split_calls)
+latex_split_call_sites <- build_nice_latex_table(table_data_split_call_sites)
 
 ############################################## LATEX COMMAND GENERATION ##############################################
 
