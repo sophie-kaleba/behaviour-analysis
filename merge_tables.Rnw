@@ -1,0 +1,208 @@
+%!TEX root = paper.tex
+<<knitr-load, echo=FALSE, include=FALSE>>=
+if (Sys.getenv("RSTUDIO") == "1") {
+    setwd("/home/sopi/Documents/Side_projects/behaviour-analysis/")
+} else {
+   opts_chunk$set(
+    fig.path="./figure/",
+    fig.keep='all',
+    dev=c('tikz'), #dev='pdf',c('tikz', 'svg'),
+    dev.args=list(pointsize=8, timestamp = FALSE),
+    echo=FALSE,
+    external=FALSE,
+    tidy=FALSE)
+
+  ## Make sure that TikZDevice is used for measuring size of latex labels
+  options(device = function(...) tikzDevice::tikz(tempfile(), ...))
+}
+
+source("./scripts/libraries.R", chdir=TRUE)
+
+folder_out <- file.path(getwd(),"results", "experiment")
+
+load_data_file <- function(filename) {
+  print(filename)
+  row_names <- c("Benchmark", "Before", "After", "Variation", "Type")
+  t(read.csv(filename, sep="\n", strip.white = TRUE, header=FALSE, row.names = row_names))
+}
+
+load_all_tables <- function (folder, type, call_or_site) { 
+  result <- NULL
+  folder <- file.path(folder_out, type, call_or_site)
+  files <- sort(list.files(folder))
+  
+  for (f in files) {
+    print(f)
+    data <- load_data_file(file.path(folder, f))
+    result <- rbind(result, data)
+  }
+  return(result)
+}
+
+
+data_tp_calls <- load_all_tables(folder_out, "TP", "Calls")
+data_tp_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
+
+data_split_calls <- load_all_tables(folder_out, "Split", "Calls")
+data_split_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
+
+
+############################################## TABLES ###############################################    
+
+## TABLE GENERATION
+# Distribution of call targets
+distrib_cache_size_obs_no_splitting <- xtable(num_target_observed, caption = "Distribution of call-targets (Observed) - Splitting ignored")
+distrib_cache_size_obs_no_splitting <- autoformat(distrib_cache_size_obs_no_splitting, zap = getOption("digits"))
+
+distrib_cache_size_original_no_splitting <- xtable(num_target_original, caption = "Distribution of call-targets (Original) - Splitting ignored")
+distrib_cache_size_original_no_splitting <- autoformat(distrib_cache_size_original_no_splitting, zap = getOption("digits"))
+
+distrib_cache_size_obs_splitting <- xtable(num_target_observed_w_splitting, caption = "Distribution of call-targets (Observed) - Splitting acknowledged")
+distrib_cache_size_obs_splitting <- autoformat(distrib_cache_size_obs_splitting, zap = getOption("digits"))
+
+distrib_cache_size_original_splitting <- xtable(num_target_original_w_splitting, caption = "Distribution of call-targets (Original) - Splitting acknowledged")
+distrib_cache_size_original_splitting <- autoformat(distrib_cache_size_original_splitting, zap = getOption("digits"))
+
+# Target polymorphism
+target_polymorphism <-  xtable(summary_tp, caption = "Distribution of call-targets (Observed) - Splitting ignored")
+target_polymorphism <- autoformat(target_polymorphism, zap = getOption("digits"))
+
+target_polymorphism_detail <- xtable(summary_cache_change_detail, caption = "Distribution of call-targets (Observed) - Splitting ignored")
+target_polymorphism_detail <- autoformat(target_polymorphism_detail, zap = getOption("digits"))
+
+# Hottest call-sites
+hottest_mega_ct_table <- xtable(table_optimizable, caption = "Hottest megamorphic call sites")
+hottest_mega_ct_table <- autoformat(hottest_mega_ct_table, zap = getOption("digits"))
+
+hottest_30mega_ct_table <- xtable(head(table_optimizable,30), caption = "Hottest megamorphic call sites")
+hottest_30mega_ct_table <- autoformat(hottest_30mega_ct_table, zap = getOption("digits"))
+
+most_executed <- xtable(head(most_executed  %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='left'), 35), caption = "Most executed call-sites")
+most_executed <- autoformat(most_executed, zap = getOption("digits"))
+
+# Splitting 
+splitting_table <- xtable(head(summary_splitting %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='left'), 30), type = "latex")
+splitting_table <- autoformat(splitting_table, zap = getOption("digits"))
+
+effect_splitting_sites_table <- xtable(splitting_transition_summary_sites, type = "latex")
+effect_splitting_sites_table <- autoformat(effect_splitting_sites_table, zap = getOption("digits"))
+
+effect_splitting_sites_real_table <- xtable(splitting_transition_summary_sites_real, type = "latex")
+effect_splitting_sites_real_table <- autoformat(effect_splitting_sites_real_table, zap = getOption("digits"))
+
+effect_splitting_frequency_table <- xtable(splitting_transition_summary_frequency, type = "latex")
+effect_splitting_frequency_table <- autoformat(effect_splitting_frequency_table, zap = getOption("digits"))
+# TODO
+distrib_split_per_ct_table <- xtable(summary_splitting, caption = "Distribution of splits per target")
+distrib_split_per_ct_table <- autoformat(distrib_split_per_ct_table, zap = getOption("digits"))
+
+## TABLE SAVING
+table_folder <- paste(now,"summary_tables",sep="/")
+dir.create(table_folder)
+print(xtable(distrib_cache_size_obs_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"call_target_distrib.tex", sep="/"))
+print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE, file = paste(table_folder,"hottest_megamorphic_call_sites.tex", sep="/"))
+print(xtable(distrib_split_per_ct_table, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE, file = paste(table_folder,"splits_per_target.tex", sep="/"))
+print(xtable(summary_splitting %>% dplyr:: mutate_at("Source.Section", str_trunc, 25, side='left'), type = "latex"), include.rownames=FALSE, tabular.environment="longtable", floating=FALSE,  file = paste(table_folder,"splitting_details.tex", sep="/"))
+
+############################################## LATEX COMMAND GENERATION ##############################################
+
+@
+\def\CacheDistribObservedSplitting{%
+<<CacheDistribObservedSplitting, echo=FALSE, results='asis'>>=
+print(xtable(distrib_cache_size_obs_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+  
+\def\CacheDistribOriginalSplitting{%
+<<CacheDistribOriginalSplitting, echo=FALSE, results='asis'>>=
+print(xtable(distrib_cache_size_original_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+
+\def\CacheDistribObservedNoSplitting{%
+<<CacheDistribObservedNoSplitting, echo=FALSE, results='asis'>>=
+print(xtable(distrib_cache_size_obs_no_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+  
+\def\CacheDistribOriginalNoSplitting{%
+<<CacheDistribOriginalNoSplitting, echo=FALSE, results='asis'>>=
+print(xtable(distrib_cache_size_original_no_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+  
+\def\TargetPolymorphism{%
+<<TargetPolymorphism, echo=FALSE, results='asis'>>=
+print(xtable(target_polymorphism, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+  
+\def\TargetPolymorphismDetails{%
+<<TargetPolymorphismDetails, echo=FALSE, results='asis'>>=
+print(xtable(target_polymorphism_detail, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+  @
+  }%
+
+\def\Splitting{%
+<<Splitting, echo=FALSE, results='asis'>>=
+print(splitting_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
+      @
+  }%
+  
+  \def\EffectSplittingSites{%
+<<EffectSplittingSites, echo=FALSE, results='asis'>>=
+print(effect_splitting_sites_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
+      @
+  }%
+  
+  \def\EffectSplittingSitesReal{%
+<<EffectSplittingSitesReal, echo=FALSE, results='asis'>>=
+print(effect_splitting_sites_real_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
+      @
+  }%
+  
+  \def\EffectSplittingFrequency{%
+<<EffectSplittingFrequency, echo=FALSE, results='asis'>>=
+print(effect_splitting_frequency_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
+      @
+  }%
+
+  \def\HottestMegamorphic{%
+<<HottestMegamorphic, echo=FALSE, results='asis'>>=
+print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE)
+    @
+  }%
+  
+  \def\SuperHottestMegamorphic{%
+<<SuperHottestMegamorphic, echo=FALSE, results='asis'>>=
+print(xtable(hottest_30mega_ct_table, type = "latex"), include.rownames=FALSE)
+    @
+  }%
+  
+  \def\MostExecutedCallSite{%
+<<MostExecutedCallSite, echo=FALSE, results='asis'>>=
+print(xtable(most_executed, type = "latex"), include.rownames=TRUE, tabular.environment="longtable",floating=FALSE)
+      @
+  }%
+  
+\newcommand{\BenchmarkName}{$\Sexpr{benchmark_name}$\xspace}
+\newcommand{\NumIterations}{$\Sexpr{number_iterations}$\xspace}
+\newcommand{\NumInnerIterations}{$\Sexpr{number_inner_iterations}$\xspace}
+\newcommand{\LogFilename}{\Sexpr{filename}\xspace}
+\newcommand{\Hihaho}{\Sexpr{hihaho}\xspace}
+\newcommand{\Yuria}{\Sexpr{yuria}\xspace}
+\newcommand{\Flags}{$\Sexpr{flags_cmd}$\xspace}
+
+\newcommand{\NumberCallSites}{$\Sexpr{Num.Call.Sites}$\xspace}
+\newcommand{\NumberCallSitesSplitting}{$\Sexpr{Num.Call.Sites.Incl.Splitted}$\xspace}
+\newcommand{\NumberTargetsOriginal}{$\Sexpr{Num.Targets.Original}$\xspace}
+\newcommand{\NumberTargetsObserved}{$\Sexpr{Num.Targets.Observed}$\xspace}
+
+\newcommand{\NumberCalls}{$\Sexpr{nrow(data)}$\xspace}
+\newcommand{\NumOfSplittedTargets}{$\Sexpr{nrow(summary_splitting)}$\xspace}
+\newcommand{\NumsOfSplits}{$\Sexpr{Number.Splits}$\xspace}
+
+
+
+
+
