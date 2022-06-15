@@ -18,12 +18,14 @@ if (Sys.getenv("RSTUDIO") == "1") {
 
 source("./scripts/libraries.R", chdir=TRUE)
 
+
 folder_out <- file.path(getwd(),"results", "experiment")
 
+############################################## UTILS ###############################################  
+
 load_data_file <- function(filename) {
-  print(filename)
   row_names <- c("Benchmark", "Before", "After", "Variation", "Type")
-  t(read.csv(filename, sep="\n", strip.white = TRUE, header=FALSE, row.names = row_names))
+  as.data.frame(t(read.csv(filename, sep="\n", strip.white = TRUE, header=FALSE, row.names = row_names)))
 }
 
 load_all_tables <- function (folder, type, call_or_site) { 
@@ -32,13 +34,13 @@ load_all_tables <- function (folder, type, call_or_site) {
   files <- sort(list.files(folder))
   
   for (f in files) {
-    print(f)
     data <- load_data_file(file.path(folder, f))
     result <- rbind(result, data)
   }
   return(result)
 }
 
+############################################## MERGED TABLES ############################################### 
 
 data_tp_calls <- load_all_tables(folder_out, "TP", "Calls")
 data_tp_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
@@ -46,8 +48,36 @@ data_tp_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
 data_split_calls <- load_all_tables(folder_out, "Split", "Calls")
 data_split_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
 
+rearrange_table <- function(df) {
+ spec <- tidyr::build_wider_spec(
+  df, 
+  names_from = Type, 
+  values_from = c(Before, After, Variation), 
+  names_glue = "{Type}_{.value}")
+  
+  spec <- spec %>% 
+    arrange(factor(.name, levels = c("MONO_Before", "MONO_After", "MONO_Variation", "POLY_Before", "POLY_After", "POLY_Variation", "MEGA_Before", "MEGA_After", "MEGA_Variation") ))
+  
+  return(tidyr::pivot_wider_spec(df, spec))
+}
 
-############################################## TABLES ###############################################    
+table_data_tp_calls <- rearrange_table(data_tp_calls)
+table_data_tp_call_sites <- rearrange_table(data_tp_call_sites)
+
+table_data_split_calls <- rearrange_table(data_split_calls)
+table_data_split_call_sites <- rearrange_table(data_split_call_sites)
+
+
+
+
+
+
+tabular((Species + 1) ~ (n=1) + Format(digits=2)*(Sepal.Length + Sepal.Width)*(mean + sd), data = iris)
+
+
+
+
+
 
 ## TABLE GENERATION
 # Distribution of call targets
