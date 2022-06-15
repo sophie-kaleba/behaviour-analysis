@@ -18,9 +18,10 @@ if (Sys.getenv("RSTUDIO") == "1") {
 
 source("./scripts/libraries.R", chdir=TRUE)
   
-data <- load_data_file("./results/AsciidoctorConvertSmall_Apr26-2022_11:32:52/parsed_AsciidoctorConvertSmall.mylog")
+data <- load_data_file("./results/DeltaBlue_Apr07-2022_17:37:55/parsed_DeltaBlue.mylog")
 data <- as_tibble(data)
-benchmark_name <- "asci"
+folder_out <- file.path(getwd(),"results", "experiment")
+benchmark_name <- "DB"
 
 ############################################## MAIN TABLE ############################################## 
 # remove any invalid data (extra logging info ignored by parsing)
@@ -61,85 +62,93 @@ compute_before_after <- function(df, cache_status_int, call_or_site) {
   }
   cache_status <- compute_cache_status(df, cache_status_int)
   row_call_site <- compute_amount_calls_sites(df, call_or_site)
-  return ( df[cache_status,row_call_site][[call_or_site]] )
+  result <- df[cache_status,row_call_site][[call_or_site]]
+  if (is.empty(result)) {
+    return(0)
+    }
+  return (result)
 }
 
 compute_evolution <- function(before, after) {
+  if (before == 0 & after == 0) {return(0)}
   return (((after - before) / before) * 100)
 }
 
 write_on_disk <- function(df, name, path = "") {
- write.table(df,paste(benchmark_name, name,".csv",sep="-"), col.names = FALSE, row.names = FALSE) 
+ write.table(df,paste(path,paste(benchmark_name, name,".csv",sep="-"), sep="/"), col.names = FALSE, row.names = FALSE) 
 }
 
 # Target polymorphism - calls
 before <- compute_before_after(num_target_original_wo_splitting, 1, "Num.Calls")
 after <- compute_before_after(num_target_observed_wo_splitting_tp, 1, "Num.Calls")
-tp_calls_mono <- c(benchmark_name, before, after, compute_evolution(before, after))
+tp_calls_mono <- c(benchmark_name, before, after, compute_evolution(before, after), "MONO")
 
 before <- compute_before_after(num_target_original_wo_splitting, 2, "Num.Calls")
 after <- compute_before_after(num_target_observed_wo_splitting_tp, 2, "Num.Calls")
-tp_calls_poly <- c(benchmark_name, before, after, compute_evolution(before, after))
+tp_calls_poly <- c(benchmark_name, before, after, compute_evolution(before, after), "POLY")
 
 before <- compute_before_after(num_target_original_wo_splitting, 9, "Cumulative.Calls")
 after <- compute_before_after(num_target_observed_wo_splitting_tp, 9, "Cumulative.Calls")
-tp_calls_mega <- c(benchmark_name, before, after, compute_evolution(before, after))
+tp_calls_mega <- c(benchmark_name, before, after, compute_evolution(before, after), "MEGA")
 
 # Target polymoprhism - call sites
 before <- compute_before_after(num_target_original_wo_splitting, 1, "Num.Call.Sites")
 after <- compute_before_after(num_target_observed_wo_splitting_tp, 1, "Num.Call.Sites")
-tp_call_sites_mono <- c(benchmark_name, before, after, compute_evolution(before, after))
+tp_call_sites_mono <- c(benchmark_name, before, after, compute_evolution(before, after), "MONO")
 
 before <- compute_before_after(num_target_original_wo_splitting, 2, "Num.Call.Sites")
 after <- compute_before_after(num_target_observed_wo_splitting_tp, 2, "Num.Call.Sites")
-tp_call_sites_poly <- c(benchmark_name, before, after, compute_evolution(before, after))
+tp_call_sites_poly <- c(benchmark_name, before, after, compute_evolution(before, after), "POLY")
 
 before <- compute_before_after(num_target_original_wo_splitting, 9, "Cumulative.Call.Sites")
 after <- compute_before_after(num_target_observed_wo_splitting_tp, 9, "Cumulative.Call.Sites")
-tp_call_sites_mega <- c(benchmark_name, before, after, compute_evolution(before, after))
+tp_call_sites_mega <- c(benchmark_name, before, after, compute_evolution(before, after), "MEGA")
 
 # Splitting - calls
 before <- compute_before_after(num_target_observed_wo_splitting_tp, 1, "Num.Calls")
 after <- compute_before_after(num_target_observed_w_splitting_tp, 1, "Num.Calls")
-split_calls_mono <- c(benchmark_name, before, after, compute_evolution(before, after))
+split_calls_mono <- c(benchmark_name, before, after, compute_evolution(before, after), "MONO")
 
 before <- compute_before_after(num_target_observed_wo_splitting_tp, 2, "Num.Calls")
 after <- compute_before_after(num_target_observed_w_splitting_tp, 2, "Num.Calls")
-split_calls_poly <- c(benchmark_name, before, after, compute_evolution(before, after))
+split_calls_poly <- c(benchmark_name, before, after, compute_evolution(before, after), "POLY")
 
 before <- compute_before_after(num_target_observed_wo_splitting_tp, 9, "Cumulative.Calls")
 after <- compute_before_after(num_target_observed_w_splitting_tp, 9, "Cumulative.Calls")
-split_calls_mega <- c(benchmark_name, before, after, compute_evolution(before, after))
+split_calls_mega <- c(benchmark_name, before, after, compute_evolution(before, after), "MEGA")
 
 # Splitting - call-sites
 before <- compute_before_after(num_target_observed_wo_splitting_tp, 1, "Num.Call.Sites")
 after <- compute_before_after(num_target_observed_w_splitting_tp, 1, "Num.Call.Sites")
-split_call_sites_mono <- c(benchmark_name, before, after, compute_evolution(before, after))
+split_call_sites_mono <- c(benchmark_name, before, after, compute_evolution(before, after), "MONO")
 
 before <- compute_before_after(num_target_observed_wo_splitting_tp, 2, "Num.Call.Sites")
 after <- compute_before_after(num_target_observed_w_splitting_tp, 2, "Num.Call.Sites")
-split_call_sites_poly <- c(benchmark_name, before, after, compute_evolution(before, after))
+split_call_sites_poly <- c(benchmark_name, before, after, compute_evolution(before, after), "POLY")
 
 before <- compute_before_after(num_target_observed_wo_splitting_tp, 9, "Cumulative.Call.Sites")
 after <- compute_before_after(num_target_observed_w_splitting_tp, 9, "Cumulative.Call.Sites")
 # it augmented by x%
-split_call_sites_mega <- c(benchmark_name, before, after, compute_evolution(before, after))
+split_call_sites_mega <- c(benchmark_name, before, after, compute_evolution(before, after), "MEGA")
 
 ############################################## SAVE AS CSV ###############################################  
-write_on_disk(tp_calls_mono, "tp_calls_mono")
-write_on_disk(tp_calls_poly, "tp_calls_poly")
-write_on_disk(tp_calls_mega, "tp_calls_mega")
+dir.create(file.path(folder_out,"TP","Calls"), recursive = TRUE)
+dir.create(file.path(folder_out,"TP","Call-Sites"), recursive = TRUE)
+dir.create(file.path(folder_out,"Split","Calls"), recursive = TRUE)
+dir.create(file.path(folder_out,"Split","Call-Sites"), recursive = TRUE)
 
-write_on_disk(tp_call_sites_mono, "tp_call_sites_mono")
-write_on_disk(tp_call_sites_poly, "tp_call_sites_poly")
-write_on_disk(tp_call_sites_mega, "tp_call_sites_mega")
+write_on_disk(tp_calls_mono, "tp_calls_mono", file.path(folder_out,"TP","Calls"))
+write_on_disk(tp_calls_poly, "tp_calls_poly", file.path(folder_out,"TP","Calls"))
+write_on_disk(tp_calls_mega, "tp_calls_mega", file.path(folder_out,"TP","Calls"))
 
-write_on_disk(split_calls_mono, "split_calls_mono")
-write_on_disk(split_calls_poly, "split_calls_poly")
-write_on_disk(split_calls_mega, "split_calls_mega")
+write_on_disk(tp_call_sites_mono, "tp_call_sites_mono", file.path(folder_out,"TP","Call-Sites"))
+write_on_disk(tp_call_sites_poly, "tp_call_sites_poly", file.path(folder_out,"TP","Call-Sites"))
+write_on_disk(tp_call_sites_mega, "tp_call_sites_mega", file.path(folder_out,"TP","Call-Sites"))
 
-write_on_disk(split_call_sites_mono, "split_call_site_mono")
-write_on_disk(split_call_sites_poly, "split_call_site_poly")
-write_on_disk(split_call_sites_mega, "split_call_site_mega")
+write_on_disk(split_calls_mono, "split_calls_mono", file.path(folder_out,"Split","Calls"))
+write_on_disk(split_calls_poly, "split_calls_poly", file.path(folder_out,"Split","Calls"))
+write_on_disk(split_calls_mega, "split_calls_mega", file.path(folder_out,"Split","Calls"))
 
-
+write_on_disk(split_call_sites_mono, "split_call_site_mono", file.path(folder_out,"Split","Call-Sites"))
+write_on_disk(split_call_sites_poly, "split_call_site_poly", file.path(folder_out,"Split","Call-Sites"))
+write_on_disk(split_call_sites_mega, "split_call_site_mega", file.path(folder_out,"Split","Call-Sites"))
