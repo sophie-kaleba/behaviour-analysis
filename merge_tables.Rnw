@@ -28,14 +28,26 @@ load_data_file <- function(filename) {
   as.data.frame(t(read.csv(filename, sep="\n", strip.white = TRUE, header=FALSE, row.names = row_names)))
 }
 
-load_all_tables <- function (folder, type, call_or_site) { 
+load_split_file <- function(filename) {
+  read.csv(filename,sep=";", strip.white = TRUE, header=TRUE)
+}
+
+load_all_tables <- function (folder, type, call_or_site, is_transitions=FALSE) { 
   result <- NULL
   folder <- file.path(folder_out, type, call_or_site)
   files <- sort(list.files(folder))
   
   for (f in files) {
-    data <- load_data_file(file.path(folder, f))
-    result <- rbind(result, data)
+    if (is_transitions) {
+      print (f)
+      data <- load_split_file(file.path(folder, f))
+      result <- dplyr::union_all(data, result)
+      result[is.na(result)] = 0
+    }
+    else {
+      data <- load_data_file(file.path(folder, f))
+      result <- rbind(data, result)
+    }
   }
   return(result)
 }
@@ -72,6 +84,8 @@ data_tp_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
 
 data_split_calls <- load_all_tables(folder_out, "Split", "Calls")
 data_split_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
+
+data_split_transitions <- load_all_tables(folder_out, "Split", "Transitions", TRUE)
 
 # and rearranged
 table_data_tp_calls <- rearrange_table(data_tp_calls)
@@ -111,5 +125,11 @@ print(latex_tp_call_sites)
 \def\TPCalls{%
 <<TPCalls, echo=FALSE, results='asis'>>=
 print(latex_tp_calls)
+  @
+  }%
+  
+\def\SplittingTransitions{%
+<<SplittingTransitions, echo=FALSE, results='asis'>>=
+print(data_split_transitions)
   @
   }%

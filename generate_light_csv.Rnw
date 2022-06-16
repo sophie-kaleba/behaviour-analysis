@@ -47,6 +47,7 @@ total_w_splitting <- add_lookup_status_per_call(total_w_splitting)
 # Required for splitting
 transition_data <- analyse_splitting_transitions(total_w_splitting, benchmark_name, Call.Site, Call.Site.Target)
 splitting_transition_summary_sites <- summarise_transition_sites(transition_data)
+splitting_transition_summary_sites <- as.data.frame(t(splitting_transition_summary_sites))
 
 ############################################## AGGREGATED STATISTICS ###############################################   
 compute_cache_status <- function(df, num_entries) {
@@ -80,6 +81,10 @@ compute_evolution <- function(before, after) {
 
 write_on_disk <- function(df, name, path = "") {
  write.table(df,paste(path,paste(benchmark_name, name,".csv",sep="-"), sep="/"), col.names = FALSE, row.names = FALSE) 
+}
+
+write_on_disk_split <- function(df, name, path = "") {
+ write.table(df,paste(path,paste(benchmark_name, name,".csv",sep="-"), sep="/"), col.names = FALSE, row.names = TRUE, sep=";") 
 }
 
 # Target polymorphism - calls
@@ -158,4 +163,4 @@ write_on_disk(split_call_sites_mono, "split_call_site_mono", file.path(folder_ou
 write_on_disk(split_call_sites_poly, "split_call_site_poly", file.path(folder_out,"Split","Call-Sites"))
 write_on_disk(split_call_sites_mega, "split_call_site_mega", file.path(folder_out,"Split","Call-Sites"))
 
-write_on_disk(splitting_transition_summary_sites, "splitting_transition_summary_sites", file.path(folder_out,"Split","Transitions"))
+write_on_disk_split(splitting_transition_summary_sites, "splitting_transition_summary_sites", file.path(folder_out,"Split","Transitions"))
