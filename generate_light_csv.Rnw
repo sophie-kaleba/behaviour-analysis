@@ -1,27 +1,14 @@
-%!TEX root = paper.tex
-<<knitr-load, echo=FALSE, include=FALSE>>=
-if (Sys.getenv("RSTUDIO") == "1") {
-    setwd("/home/sopi/Documents/Side_projects/behaviour-analysis/")
-} else {
-   opts_chunk$set(
-    fig.path="./figure/",
-    fig.keep='all',
-    dev=c('tikz'), #dev='pdf',c('tikz', 'svg'),
-    dev.args=list(pointsize=8, timestamp = FALSE),
-    echo=FALSE,
-    external=FALSE,
-    tidy=FALSE)
-
-  ## Make sure that TikZDevice is used for measuring size of latex labels
-  options(device = function(...) tikzDevice::tikz(tempfile(), ...))
-}
+args = commandArgs(trailingOnly=TRUE)
+benchmark_name = args[1]
+folder_out = file.path(getwd(),args[2],"results")
+filename = args[3]
 
 source("./scripts/libraries.R", chdir=TRUE)
   
-data <- load_data_file("./results/DeltaBlue_Apr07-2022_17:37:55/parsed_DeltaBlue.mylog")
+data <- load_data_file(filename)
 data <- as_tibble(data)
-folder_out <- file.path(getwd(),"results", "experiment")
-benchmark_name <- "DB"
+% folder_out <- file.path(getwd(),"results", "experiment")
+% benchmark_name <- "DB"
 
 ############################################## MAIN TABLE ############################################## 
 # remove any invalid data (extra logging info ignored by parsing)
