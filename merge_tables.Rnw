@@ -90,102 +90,26 @@ latex_split_call_sites <- build_nice_latex_table(table_data_split_call_sites)
 ############################################## LATEX COMMAND GENERATION ##############################################
 
 @
-\def\CacheDistribObservedSplitting{%
-<<CacheDistribObservedSplitting, echo=FALSE, results='asis'>>=
-print(xtable(distrib_cache_size_obs_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+\def\SplitCallSites{%
+<<SplitCallSites, echo=FALSE, results='asis'>>=
+print(latex_split_call_sites)
   @
   }%
   
-\def\CacheDistribOriginalSplitting{%
-<<CacheDistribOriginalSplitting, echo=FALSE, results='asis'>>=
-print(xtable(distrib_cache_size_original_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+\def\SplitCalls{%
+<<SplitCalls, echo=FALSE, results='asis'>>=
+print(latex_split_calls)
   @
   }%
 
-\def\CacheDistribObservedNoSplitting{%
-<<CacheDistribObservedNoSplitting, echo=FALSE, results='asis'>>=
-print(xtable(distrib_cache_size_obs_no_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+\def\TPCallSites{%
+<<TPCallSites, echo=FALSE, results='asis'>>=
+print(latex_tp_call_sites)
   @
   }%
   
-\def\CacheDistribOriginalNoSplitting{%
-<<CacheDistribOriginalNoSplitting, echo=FALSE, results='asis'>>=
-print(xtable(distrib_cache_size_original_no_splitting, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
+\def\TPCalls{%
+<<TPCalls, echo=FALSE, results='asis'>>=
+print(latex_tp_calls)
   @
   }%
-  
-\def\TargetPolymorphism{%
-<<TargetPolymorphism, echo=FALSE, results='asis'>>=
-print(xtable(target_polymorphism, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
-  @
-  }%
-  
-\def\TargetPolymorphismDetails{%
-<<TargetPolymorphismDetails, echo=FALSE, results='asis'>>=
-print(xtable(target_polymorphism_detail, type = "latex"), include.rownames=FALSE, tabular.environment="longtable",floating=FALSE)
-  @
-  }%
-
-\def\Splitting{%
-<<Splitting, echo=FALSE, results='asis'>>=
-print(splitting_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
-      @
-  }%
-  
-  \def\EffectSplittingSites{%
-<<EffectSplittingSites, echo=FALSE, results='asis'>>=
-print(effect_splitting_sites_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
-      @
-  }%
-  
-  \def\EffectSplittingSitesReal{%
-<<EffectSplittingSitesReal, echo=FALSE, results='asis'>>=
-print(effect_splitting_sites_real_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
-      @
-  }%
-  
-  \def\EffectSplittingFrequency{%
-<<EffectSplittingFrequency, echo=FALSE, results='asis'>>=
-print(effect_splitting_frequency_table, include.rownames=FALSE, tabular.environment="longtable", floating=FALSE)
-      @
-  }%
-
-  \def\HottestMegamorphic{%
-<<HottestMegamorphic, echo=FALSE, results='asis'>>=
-print(xtable(hottest_mega_ct_table, type = "latex"), include.rownames=FALSE)
-    @
-  }%
-  
-  \def\SuperHottestMegamorphic{%
-<<SuperHottestMegamorphic, echo=FALSE, results='asis'>>=
-print(xtable(hottest_30mega_ct_table, type = "latex"), include.rownames=FALSE)
-    @
-  }%
-  
-  \def\MostExecutedCallSite{%
-<<MostExecutedCallSite, echo=FALSE, results='asis'>>=
-print(xtable(most_executed, type = "latex"), include.rownames=TRUE, tabular.environment="longtable",floating=FALSE)
-      @
-  }%
-  
-\newcommand{\BenchmarkName}{$\Sexpr{benchmark_name}$\xspace}
-\newcommand{\NumIterations}{$\Sexpr{number_iterations}$\xspace}
-\newcommand{\NumInnerIterations}{$\Sexpr{number_inner_iterations}$\xspace}
-\newcommand{\LogFilename}{\Sexpr{filename}\xspace}
-\newcommand{\Hihaho}{\Sexpr{hihaho}\xspace}
-\newcommand{\Yuria}{\Sexpr{yuria}\xspace}
-\newcommand{\Flags}{$\Sexpr{flags_cmd}$\xspace}
-
-\newcommand{\NumberCallSites}{$\Sexpr{Num.Call.Sites}$\xspace}
-\newcommand{\NumberCallSitesSplitting}{$\Sexpr{Num.Call.Sites.Incl.Splitted}$\xspace}
-\newcommand{\NumberTargetsOriginal}{$\Sexpr{Num.Targets.Original}$\xspace}
-\newcommand{\NumberTargetsObserved}{$\Sexpr{Num.Targets.Observed}$\xspace}
-
-\newcommand{\NumberCalls}{$\Sexpr{nrow(data)}$\xspace}
-\newcommand{\NumOfSplittedTargets}{$\Sexpr{nrow(summary_splitting)}$\xspace}
-\newcommand{\NumsOfSplits}{$\Sexpr{Number.Splits}$\xspace}
-
-
-
-
-
