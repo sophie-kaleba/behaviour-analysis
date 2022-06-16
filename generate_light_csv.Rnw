@@ -20,8 +20,8 @@ source("./scripts/libraries.R", chdir=TRUE)
   
 data <- load_data_file("./results/DeltaBlue_Apr07-2022_17:37:55/parsed_DeltaBlue.mylog")
 data <- as_tibble(data)
-# folder_out <- file.path(getwd(),"results", "experiment")
-# benchmark_name <- "DB"
+folder_out <- file.path(getwd(),"results", "experiment")
+benchmark_name <- "DB"
 
 ############################################## MAIN TABLE ############################################## 
 # remove any invalid data (extra logging info ignored by parsing)
@@ -75,7 +75,7 @@ compute_before_after <- function(df, cache_status_int, call_or_site) {
 
 compute_evolution <- function(before, after) {
   if (before == 0 & after == 0) {return(0)}
-  return (round(((after - before) / before) * 100),  digits = 1)
+  return (round(((after - before) / before) * 100,  digits = 1))
 }
 
 write_on_disk <- function(df, name, path = "") {
