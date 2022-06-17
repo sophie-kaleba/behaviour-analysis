@@ -18,9 +18,6 @@ if (Sys.getenv("RSTUDIO") == "1") {
 
 source("./scripts/libraries.R", chdir=TRUE)
 
-
-folder_out <- file.path(getwd(),"results", "experiment")
-
 ############################################## UTILS ###############################################  
 
 load_data_file <- function(filename) {
@@ -29,7 +26,7 @@ load_data_file <- function(filename) {
 }
 
 load_split_file <- function(filename) {
-  read.csv(filename,sep=";", strip.white = TRUE, header=TRUE)
+  read.csv(filename,sep=";", strip.white = TRUE, header=TRUE, fill=TRUE)
 }
 
 load_all_tables <- function (folder, type, call_or_site, is_transitions=FALSE) { 
@@ -39,8 +36,11 @@ load_all_tables <- function (folder, type, call_or_site, is_transitions=FALSE) {
   
   for (f in files) {
     if (is_transitions) {
-      print (f)
       data <- load_split_file(file.path(folder, f))
+      
+      if (empty(data)) {
+        data[1,1] <- str_split(f, "-", simplify = TRUE)[1,1]
+      }
       result <- dplyr::union_all(data, result)
       result[is.na(result)] = 0
     }
@@ -71,9 +71,9 @@ build_nice_latex_table <- function(df) {
 names(df)[2] = names(df)[5] = names(df)[8] = "Before"
 names(df)[3] = names(df)[6] = names(df)[9] = "After"
 names(df)[4] = names(df)[7] = names(df)[10] = "Variation"
-beauty <- kableExtra::kable(df, booktabs = TRUE) %>%
+beauty <- kableExtra::kable(df, booktabs = TRUE, linesep = "") %>%
   kableExtra::add_header_above(c("", "MONO"=3, "POLY"=3, "MEGA"=3)) %>%
-  kableExtra::kable_styling(latex_options = "hold_position")
+  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
 return(beauty)
 }
 
@@ -86,6 +86,7 @@ data_split_calls <- load_all_tables(folder_out, "Split", "Calls")
 data_split_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
 
 data_split_transitions <- load_all_tables(folder_out, "Split", "Transitions", TRUE)
+data_split_transitions$X <- NULL
 
 # and rearranged
 table_data_tp_calls <- rearrange_table(data_tp_calls)
@@ -100,6 +101,9 @@ latex_tp_call_sites <- build_nice_latex_table(table_data_tp_call_sites)
 
 latex_split_calls <- build_nice_latex_table(table_data_split_calls)
 latex_split_call_sites <- build_nice_latex_table(table_data_split_call_sites)
+
+latex_data_split_transitions <- kableExtra::kable(data_split_transitions, booktabs = TRUE, linesep = "") %>%
+  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
 
 ############################################## LATEX COMMAND GENERATION ##############################################
 
@@ -130,6 +134,6 @@ print(latex_tp_calls)
   
 \def\SplittingTransitions{%
 <<SplittingTransitions, echo=FALSE, results='asis'>>=
-print(data_split_transitions)
+print(latex_data_split_transitions)
   @
   }%

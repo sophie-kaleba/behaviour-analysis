@@ -13,20 +13,20 @@ untar_file () {
     tar -I lz4 -xf "$1"
 }
 
-for f in `ls ${ROOT}/${FOLDER}`; do
-	BENCH_NAME=${f%%_*}
-	cd ${ROOT}/${FOLDER}/$f
-	echo "ENTERING ${ROOT}/${FOLDER}/$f"
-	untar_file ./parsed_${BENCH_NAME}.mylog.tar.lz4  .
+# for f in `ls ${ROOT}/${FOLDER}`; do
+# 	BENCH_NAME=${f%%_*}
+# 	cd ${ROOT}/${FOLDER}/$f
+# 	echo "ENTERING ${ROOT}/${FOLDER}/$f"
+# 	untar_file ./parsed_${BENCH_NAME}.mylog.tar.lz4  .
 
-	cd ${ROOT}
-	Rscript ${ROOT}/generate_light_csv.Rnw ${BENCH_NAME} ${FOLDER} ${ROOT}/${FOLDER}/$f/parsed_${BENCH_NAME}.mylog
+# 	cd ${ROOT}
+# 	Rscript ${ROOT}/generate_light_csv.Rnw ${BENCH_NAME} ${FOLDER} ${ROOT}/${FOLDER}/$f/parsed_${BENCH_NAME}.mylog
 
-	cd ${ROOT}/${FOLDER}/$f
-	tar_file parsed_${BENCH_NAME}.mylog
-	cd ${ROOT}
-done
+# 	cd ${ROOT}/${FOLDER}/$f
+# 	tar_file parsed_${BENCH_NAME}.mylog
+# 	cd ${ROOT}
+# done
 
-for fi in `ls ${ALL_FILES_FOLDER}`; do 
-	Rscript knit_merge.R merge_tables.Rnw tables.tex ${ALL_FILES_FOLDER}
-done
+#for fi in `ls ${ALL_FILES_FOLDER}`; do 
+	Rscript knit_merge.R merge_tables.Rnw tables.tex ${ROOT}/${FOLDER}/results #${ALL_FILES_FOLDER}
+#done
