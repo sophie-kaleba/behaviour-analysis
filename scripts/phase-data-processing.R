@@ -53,7 +53,7 @@ read_splitting_profiling_file <- function(filename) {
 }
 
 read_test_data <- function(filename) {
-  data <- read.csv(filename, header = TRUE, sep = ",")
+  data <- readr::read.csv(filename, header = TRUE, sep = ",")
   return(data)
 }
 

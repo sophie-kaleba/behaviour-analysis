@@ -42,6 +42,17 @@ source("behaviour-processing.R")
 source("target-polymorphism.R")
 source("splitting.R")
 
+is.empty <- function(x, mode=NULL,...){
+  
+  if(is.null(x)) {
+    warning("x is NULL")
+    return(FALSE)
+  }
+  
+  if(is.null(mode)) mode <- class(x)
+  identical(vector(mode,1),c(x,vector(class(x),1)))
+}
+
 # avoid scientific notation for numbers, it's more readable to me
 options(scipen=999)
 

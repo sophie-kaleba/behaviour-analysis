@@ -1,18 +1,3 @@
-if (Sys.getenv("RSTUDIO") != "1") { 
-  opts_chunk$set(
-      fig.path="gen/",
-      fig.keep='all',
-      dev=c('tikz'), # , 'svg'
-      dev.args=list(pointsize=8, timestamp = FALSE),
-      #dev='pdf',c('tikz', 'svg'),
-      echo=FALSE,
-      external=FALSE,
-      tidy=FALSE)
-
-  ## Make sure that TikZDevice is used for measuring size of latex labels
-  options(device = function(...) tikzDevice::tikz(tempfile(), ...))
-}
-
 vm_names <- c(
   "GraalBasic"            = "Graal",
   "GraalEnterprise"       = "Graal VM",

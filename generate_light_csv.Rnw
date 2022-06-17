@@ -1,41 +1,43 @@
+source("./scripts/libraries.R", chdir=TRUE)
+
 args = commandArgs(trailingOnly=TRUE)
 benchmark_name = args[1]
 folder_out = file.path(getwd(),args[2],"results")
 filename = args[3]
 
-source("./scripts/libraries.R", chdir=TRUE)
+writeLines(paste("[INFO] Generate the csv for",benchmark_name,"located at",filename,". Generate the csv at",folder_out))
   
 data <- load_data_file(filename)
 data <- as_tibble(data)
-% folder_out <- file.path(getwd(),"results", "experiment")
-% benchmark_name <- "DB"
+
+gc()
 
 ############################################## MAIN TABLE ############################################## 
 # remove any invalid data (extra logging info ignored by parsing)
 data <- clean_data_file(data, FALSE)
 
-# Add info on the number of call targets per call-site (taking splittng into account)
-# Add: Num.Receiver.Observed, Num.Receiver.Original
-total_w_splitting <- add_number_receivers(data, Call.Site.Target)
-total_wo_splitting <- add_number_receivers(data, Call.Site)
+gc()
+
 # Table summarizing the amount of call sites being mono, poly, mega
 total_w_splitting <- add_number_receivers(data, c(Call.Site.Target, "Benchmark"))
 total_wo_splitting <- add_number_receivers(data, c(Call.Site, "Benchmark"))
+
+gc()
 
 num_target_observed_wo_splitting_tp <- compute_num_target_details(total_wo_splitting, Call.Site,  "Observed.Receiver")
 num_target_original_wo_splitting <- compute_num_target_details(total_wo_splitting, Call.Site,  "Original.Receiver")
 num_target_observed_w_splitting_tp <- compute_num_target_details(total_w_splitting, Call.Site.Target,  "Observed.Receiver")
 
-cache_status_sites <- create_aggregate_table(num_target_observed_w_splitting_tp, c("Benchmark", "Num.Receiver", "Num.Call.Sites"),"Num.Receiver", "Num.Call.Sites")
-cache_status_calls <- head(create_aggregate_table(num_target_observed_w_splitting_tp, c("Benchmark", "Num.Receiver", "Frequency"),"Num.Receiver", "Frequency"), -1)
-
 total_w_splitting <- add_lookup_status_per_call(total_w_splitting)
+
+gc()
 
 # Required for splitting
 transition_data <- analyse_splitting_transitions(total_w_splitting, benchmark_name, Call.Site, Call.Site.Target)
 splitting_transition_summary_sites <- summarise_transition_sites(transition_data)
 splitting_transition_summary_sites <- as.data.frame(t(splitting_transition_summary_sites))
 
+gc()
 ############################################## AGGREGATED STATISTICS ###############################################   
 compute_cache_status <- function(df, num_entries) {
   return (which(rownames(df) == num_entries))
@@ -50,7 +52,11 @@ compute_before_after <- function(df, cache_status_int, call_or_site) {
     d <- df %>%
       filter(Num.Receiver >= 2 & Num.Receiver <= 8) %>%
       dplyr::summarise(Sum=sum(!! sym(call_or_site)))
-    return (d$Sum)
+      result <- d$Sum
+      if (is.empty(result)) {
+        return(0)
+    }
+    return (result)
   }
   cache_status <- compute_cache_status(df, cache_status_int)
   row_call_site <- compute_amount_calls_sites(df, call_or_site)
@@ -62,7 +68,7 @@ compute_before_after <- function(df, cache_status_int, call_or_site) {
 }
 
 compute_evolution <- function(before, after) {
-  if (before == 0 & after == 0) {return(0)}
+  if (before == 0) {return(0)}
   return (round(((after - before) / before) * 100,  digits = 1))
 }
 
@@ -127,12 +133,15 @@ after <- compute_before_after(num_target_observed_w_splitting_tp, 9, "Cumulative
 # it augmented by x%
 split_call_sites_mega <- c(benchmark_name, before, after, compute_evolution(before, after), "MEGA")
 
-############################################## SAVE AS CSV ###############################################  
-dir.create(file.path(folder_out,"TP","Calls"), recursive = TRUE)
-dir.create(file.path(folder_out,"TP","Call-Sites"), recursive = TRUE)
-dir.create(file.path(folder_out,"Split","Calls"), recursive = TRUE)
-dir.create(file.path(folder_out,"Split","Call-Sites"), recursive = TRUE)
-dir.create(file.path(folder_out,"Split","Transitions"), recursive = TRUE)
+############################################## SAVE AS CSV ###############################################
+
+if (!dir.exists(file.path(folder_out,"TP")) & !dir.exists(file.path(folder_out,"Split"))) {
+  dir.create(file.path(folder_out,"TP","Calls"), recursive = TRUE)
+  dir.create(file.path(folder_out,"TP","Call-Sites"), recursive = TRUE)
+  dir.create(file.path(folder_out,"Split","Calls"), recursive = TRUE)
+  dir.create(file.path(folder_out,"Split","Call-Sites"), recursive = TRUE)
+  dir.create(file.path(folder_out,"Split","Transitions"), recursive = TRUE)
+}
 
 write_on_disk(tp_calls_mono, "tp_calls_mono", file.path(folder_out,"TP","Calls"))
 write_on_disk(tp_calls_poly, "tp_calls_poly", file.path(folder_out,"TP","Calls"))

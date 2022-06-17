@@ -1,5 +1,5 @@
 ## This file defines common functions used for data processing.
-
+writeLines("[INFO] Loading data processing")
 ## folder <- "data/all"
 ## datafileName <- "benchmark.data"
 load_all_data <- function (folder, datafileName) {

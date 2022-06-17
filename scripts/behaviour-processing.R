@@ -34,11 +34,14 @@ clean_data_file <- function(df_p, keep_blocks) {
     df <- df_p %>%
        dplyr::filter(!(Builtin. =="PROC" | Builtin. =="LAMBDA" | Builtin. =="block")) 
   }
+  
+  gc()
 
   df <- df %>% 
     dplyr::filter(!(Source.Section=="")) %>% 
     tibble::rowid_to_column(var="Call.ID") %>%
     mutate(across(where(is.character), str_trim)) #trim all columns
+  df <- as_tibble(df)
   return (df)
 }
 
