@@ -18,7 +18,7 @@ if (Sys.getenv("RSTUDIO") == "1") {
 
 source("./scripts/libraries.R", chdir=TRUE)
 
-folder_out <- "./results/07-06-22_16-08-09/results/"
+#folder_out <- "./results/07-06-22_16-08-09/results/"
 
 ############################################## UTILS ###############################################  
 
@@ -68,6 +68,39 @@ rearrange_table <- function(df) {
   return(tidyr::pivot_wider_spec(df, spec))
 }
 
+# Here we'll collapse together: all the PSDUtil, PSDImage, PSDCompose and ChunkyColor
+combine_similar_benchmarks <- function(df, benchmark_prefix) {
+  table_mean <- df %>%
+      filter(str_detect(Benchmark, benchmark_prefix)) %>%
+      dplyr::mutate(across(!Benchmark, as.numeric)) %>%
+      dplyr::summarise(across(!Benchmark, mean)) %>%
+      dplyr::mutate_if(is.numeric, round, 1) %>%
+      as.data.frame()
+  row.names(table_mean) <- "Mean"
+  
+  table_sd <- df %>%
+      filter(str_detect(Benchmark, benchmark_prefix)) %>%
+      dplyr::mutate(across(!Benchmark, as.numeric)) %>%
+      dplyr::summarise(across(!Benchmark, sd)) %>%
+      dplyr::mutate_if(is.numeric, round, 1) %>%
+      as.data.frame()
+  row.names(table_sd) <- "SD"
+  
+  aux_table <- rbind(table_mean, table_sd)
+  aux_table[1,]<-paste(aux_table[1,]," (±",aux_table[2,],")", sep="")
+  aux_table <- aux_table[-c(2),]
+  
+  aux_table$Benchmark <- benchmark_prefix
+  row.names(aux_table) <- NULL
+  
+  df <- df %>% 
+    filter(!str_detect(Benchmark, benchmark_prefix))
+    
+  df <- rbind(df, aux_table)
+  
+  return(df)
+}
+
 build_nice_latex_table <- function(df) {
 # trash the data BUT looks exactly how it should for the paper
 # see https://stackoverflow.com/questions/13984470/possible-to-create-latex-multicolumns-in-xtable/28420723#28420723
@@ -89,7 +122,7 @@ data_split_calls <- load_all_tables(folder_out, "Split", "Calls")
 data_split_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
 
 data_split_transitions <- load_all_tables(folder_out, "Split", "Transitions", TRUE)
-data_split_transitions <- data_split_transitions %>% dplyr::arrange(Transition)  %>% select(-contains("..."))
+data_split_transitions <- data_split_transitions %>% dplyr::arrange(Transition) %>% rename(Benchmark = Transition)  %>% select(-contains("..."))
 
 # and rearranged
 table_data_tp_calls <- rearrange_table(data_tp_calls) %>% dplyr::arrange(Benchmark)
@@ -99,26 +132,30 @@ table_data_split_calls <- rearrange_table(data_split_calls) %>% dplyr::arrange(B
 table_data_split_call_sites <- rearrange_table(data_split_call_sites) %>% dplyr::arrange(Benchmark)
 
 # Need to merge together the benchmarks with the same behavior
-# Here we'll collapse together: all the PSDUtil, PSDImage, PSDCompose and ChunkyColor
-table_data_tp_calls_test <- table_data_tp_calls %>%
-    filter(str_detect(Benchmark, "PsdCompose")) %>%
-    dplyr::mutate(across(!Benchmark, as.numeric)) %>%
-    dplyr::summarise(across(!Benchmark, mean)) %>%
-    dplyr::mutate_if(is.numeric, round, 1) %>%
-    as.data.frame()
-row.names(table_data_tp_calls_test) <- "Mean"
+table_data_tp_calls <- combine_similar_benchmarks(table_data_tp_calls, "PsdUtil")
+table_data_tp_calls <- combine_similar_benchmarks(table_data_tp_calls, "PsdCompose")
+table_data_tp_calls <- combine_similar_benchmarks(table_data_tp_calls, "PsdImage")
+table_data_tp_calls <- combine_similar_benchmarks(table_data_tp_calls, "ChunkyColor")  %>% dplyr::arrange(Benchmark)
 
-table_data_tp_calls_test_sd <- table_data_tp_calls %>%
-    filter(str_detect(Benchmark, "PsdCompose")) %>%
-    dplyr::mutate(across(!Benchmark, as.numeric)) %>%
-    dplyr::summarise(across(!Benchmark, sd)) %>%
-    dplyr::mutate_if(is.numeric, round, 1) %>%
-    as.data.frame()
-row.names(table_data_tp_calls_test_sd) <- "SD"
+table_data_tp_call_sites <- combine_similar_benchmarks(table_data_tp_call_sites, "PsdUtil")
+table_data_tp_call_sites <- combine_similar_benchmarks(table_data_tp_call_sites, "PsdCompose")
+table_data_tp_call_sites <- combine_similar_benchmarks(table_data_tp_call_sites, "PsdImage")
+table_data_tp_call_sites <- combine_similar_benchmarks(table_data_tp_call_sites, "ChunkyColor")  %>% dplyr::arrange(Benchmark)
 
-toto <- rbind(table_data_tp_calls_test, table_data_tp_calls_test_sd)
-toto[1,]<-paste(toto[1,]," (",toto[2,],")", sep="")
-toto[2,] <- NULL
+table_data_split_calls <- combine_similar_benchmarks(table_data_split_calls, "PsdUtil")
+table_data_split_calls <- combine_similar_benchmarks(table_data_split_calls, "PsdCompose")
+table_data_split_calls <- combine_similar_benchmarks(table_data_split_calls, "PsdImage")
+table_data_split_calls <- combine_similar_benchmarks(table_data_split_calls, "ChunkyColor")  %>% dplyr::arrange(Benchmark)
+
+table_data_split_call_sites <- combine_similar_benchmarks(table_data_split_call_sites, "PsdUtil")
+table_data_split_call_sites <- combine_similar_benchmarks(table_data_split_call_sites, "PsdCompose")
+table_data_split_call_sites <- combine_similar_benchmarks(table_data_split_call_sites, "PsdImage")
+table_data_split_call_sites <- combine_similar_benchmarks(table_data_split_call_sites, "ChunkyColor")  %>% dplyr::arrange(Benchmark)
+
+data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "PsdUtil")
+data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "PsdCompose")
+data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "PsdImage")
+data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "ChunkyColor")  %>% dplyr::arrange(Benchmark)
 
 # and all latexed
 latex_tp_calls <- build_nice_latex_table(table_data_tp_calls)
