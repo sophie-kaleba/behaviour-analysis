@@ -25,8 +25,9 @@ load_data_file <- function(filename) {
   as.data.frame(t(read.csv(filename, sep="\n", strip.white = TRUE, header=FALSE, row.names = row_names)))
 }
 
+# add check.names, otherwise it replaces the special characters by ...
 load_split_file <- function(filename) {
-  read.csv(filename,sep=";", strip.white = TRUE, header=TRUE, fill=TRUE)
+  read.csv(filename,sep=";", strip.white = TRUE, header=TRUE, fill=TRUE, check.names=FALSE)
 }
 
 load_all_tables <- function (folder, type, call_or_site, is_transitions=FALSE) { 
