@@ -87,14 +87,14 @@ data_split_calls <- load_all_tables(folder_out, "Split", "Calls")
 data_split_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
 
 data_split_transitions <- load_all_tables(folder_out, "Split", "Transitions", TRUE)
-data_split_transitions$X <- NULL
+data_split_transitions <- data_split_transitions %>% dplyr::arrange(Transition)  %>% select(-contains("..."))
 
 # and rearranged
-table_data_tp_calls <- rearrange_table(data_tp_calls)
-table_data_tp_call_sites <- rearrange_table(data_tp_call_sites)
+table_data_tp_calls <- rearrange_table(data_tp_calls) %>% dplyr::arrange(Benchmark)
+table_data_tp_call_sites <- rearrange_table(data_tp_call_sites) %>% dplyr::arrange(Benchmark)
 
-table_data_split_calls <- rearrange_table(data_split_calls)
-table_data_split_call_sites <- rearrange_table(data_split_call_sites)
+table_data_split_calls <- rearrange_table(data_split_calls) %>% dplyr::arrange(Benchmark)
+table_data_split_call_sites <- rearrange_table(data_split_call_sites) %>% dplyr::arrange(Benchmark)
 
 # and all latexed
 latex_tp_calls <- build_nice_latex_table(table_data_tp_calls)
