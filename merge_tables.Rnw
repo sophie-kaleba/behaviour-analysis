@@ -96,6 +96,20 @@ table_data_tp_call_sites <- rearrange_table(data_tp_call_sites) %>% dplyr::arran
 table_data_split_calls <- rearrange_table(data_split_calls) %>% dplyr::arrange(Benchmark)
 table_data_split_call_sites <- rearrange_table(data_split_call_sites) %>% dplyr::arrange(Benchmark)
 
+# Need to merge together the benchmarks with the same behavior
+# Here we'll collapse together: all the PSDUtil, PSDImage, PSDCompose and ChunkyColor
+table_data_tp_calls_test <- table_data_tp_calls %>%
+    filter(str_detect(Benchmark, "PsdCompose")) %>%
+    dplyr::mutate(across(!Benchmark, as.numeric)) %>%
+    dplyr::summarise(across(!Benchmark, mean))
+
+table_data_tp_calls_test_sd <- table_data_tp_calls %>%
+    filter(str_detect(Benchmark, "PsdCompose")) %>%
+    dplyr::mutate(across(!Benchmark, as.numeric)) %>%
+    dplyr::summarise(across(!Benchmark, sd))
+
+str(table_data_tp_calls_test)
+
 # and all latexed
 latex_tp_calls <- build_nice_latex_table(table_data_tp_calls)
 latex_tp_call_sites <- build_nice_latex_table(table_data_tp_call_sites)
