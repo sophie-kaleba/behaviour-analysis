@@ -18,6 +18,8 @@ if (Sys.getenv("RSTUDIO") == "1") {
 
 source("./scripts/libraries.R", chdir=TRUE)
 
+folder_out <- "./results/07-06-22_16-08-09/results/"
+
 ############################################## UTILS ###############################################  
 
 load_data_file <- function(filename) {
@@ -101,14 +103,22 @@ table_data_split_call_sites <- rearrange_table(data_split_call_sites) %>% dplyr:
 table_data_tp_calls_test <- table_data_tp_calls %>%
     filter(str_detect(Benchmark, "PsdCompose")) %>%
     dplyr::mutate(across(!Benchmark, as.numeric)) %>%
-    dplyr::summarise(across(!Benchmark, mean))
+    dplyr::summarise(across(!Benchmark, mean)) %>%
+    dplyr::mutate_if(is.numeric, round, 1) %>%
+    as.data.frame()
+row.names(table_data_tp_calls_test) <- "Mean"
 
 table_data_tp_calls_test_sd <- table_data_tp_calls %>%
     filter(str_detect(Benchmark, "PsdCompose")) %>%
     dplyr::mutate(across(!Benchmark, as.numeric)) %>%
-    dplyr::summarise(across(!Benchmark, sd))
+    dplyr::summarise(across(!Benchmark, sd)) %>%
+    dplyr::mutate_if(is.numeric, round, 1) %>%
+    as.data.frame()
+row.names(table_data_tp_calls_test_sd) <- "SD"
 
-str(table_data_tp_calls_test)
+toto <- rbind(table_data_tp_calls_test, table_data_tp_calls_test_sd)
+toto[1,]<-paste(toto[1,]," (",toto[2,],")", sep="")
+toto[2,] <- NULL
 
 # and all latexed
 latex_tp_calls <- build_nice_latex_table(table_data_tp_calls)
