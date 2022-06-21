@@ -18,9 +18,14 @@ if (Sys.getenv("RSTUDIO") == "1") {
 
 source("./scripts/libraries.R", chdir=TRUE)
 
-#folder_out <- "./results/07-06-22_16-08-09/results/"
+folder_out <- "./results/07-06-22_16-08-09/results/"
 
 ############################################## UTILS ###############################################  
+
+compute_evolution <- function(before, after) {
+  if (before == 0) {return(0)}
+  return (round(((after - before) / before) * 100,  digits = 1))
+}
 
 load_data_file <- function(filename) {
   row_names <- c("Benchmark", "Before", "After", "Variation", "Type")
@@ -52,6 +57,26 @@ load_all_tables <- function (folder, type, call_or_site, is_transitions=FALSE) {
       result <- rbind(data, result)
     }
   }
+  result$Benchmark <- revalue(result$Benchmark, 
+                      c("AsciidoctorConvertSmall"  = "ADConvert",
+                      "AsciidoctorLoadFileSmall" = "ADLoadFile",        
+                      "BlogRailsRoutesTwoRoutesTwoRequests" = "BlogRails",             
+                      "ChunkyDecodePngImagePass" = "ChunkyDec",                      
+                      "FannkuchRedux" = "Fannkuch",                                          
+                      "ImageDemoConv" = "ImgDemoConv",
+                      "ImageDemoSobel" = "ImgDemoSobel",                 
+                      "LeeBench" = "Lee",       
+                      "SinatraHello" = "Sinatra"))
+    result$Transition <- revalue(result$Transition, 
+                      c("AsciidoctorConvertSmall"  = "ADConvert",
+                      "AsciidoctorLoadFileSmall" = "ADLoadFile",        
+                      "BlogRailsRoutesTwoRoutesTwoRequests" = "BlogRails",             
+                      "ChunkyDecodePngImagePass" = "ChunkyDec",                      
+                      "FannkuchRedux" = "Fannkuch",                                          
+                      "ImageDemoConv" = "ImgDemoConv",
+                      "ImageDemoSobel" = "ImgDemoSobel",                 
+                      "LeeBench" = "Lee",       
+                      "SinatraHello" = "Sinatra"))
   return(result)
 }
 
@@ -78,39 +103,86 @@ combine_similar_benchmarks <- function(df, benchmark_prefix) {
       as.data.frame()
   row.names(table_mean) <- "Mean"
   
-  table_sd <- df %>%
-      filter(str_detect(Benchmark, benchmark_prefix)) %>%
-      dplyr::mutate(across(!Benchmark, as.numeric)) %>%
-      dplyr::summarise(across(!Benchmark, sd)) %>%
-      dplyr::mutate_if(is.numeric, round, 1) %>%
-      as.data.frame()
-  row.names(table_sd) <- "SD"
+  # table_sd <- df %>%
+  #     filter(str_detect(Benchmark, benchmark_prefix)) %>%
+  #     dplyr::mutate(across(!Benchmark, as.numeric)) %>%
+  #     dplyr::summarise(across(!Benchmark, sd)) %>%
+  #     dplyr::mutate_if(is.numeric, round, 1) %>%
+  #     as.data.frame()
+  # row.names(table_sd) <- "SD"
+  # 
+  # aux_table <- rbind(table_mean, table_sd)
+  # aux_table[1,]<-paste(aux_table[1,]," (+-",aux_table[2,],")", sep="")
+  # aux_table <- aux_table[-c(2),]
   
-  aux_table <- rbind(table_mean, table_sd)
-  aux_table[1,]<-paste(aux_table[1,]," (+-",aux_table[2,],")", sep="")
-  aux_table <- aux_table[-c(2),]
+  table_mean[1,]<-paste("[avg] ", table_mean[1,], sep="")
   
-  aux_table$Benchmark <- benchmark_prefix
-  row.names(aux_table) <- NULL
+  table_mean$Benchmark <- paste(benchmark_prefix,"*", sep="")
+  row.names(table_mean) <- NULL
   
   df <- df %>% 
     filter(!str_detect(Benchmark, benchmark_prefix))
     
-  df <- rbind(df, aux_table)
+  df <- rbind(df, table_mean)
   
   return(df)
 }
 
-build_nice_latex_table <- function(df) {
+build_nice_latex_table <- function(df, caption_text = "", label_text = NULL) {
 # trash the data BUT looks exactly how it should for the paper
 # see https://stackoverflow.com/questions/13984470/possible-to-create-latex-multicolumns-in-xtable/28420723#28420723
 names(df)[2] = names(df)[5] = names(df)[8] = "Before"
 names(df)[3] = names(df)[6] = names(df)[9] = "After"
 names(df)[4] = names(df)[7] = names(df)[10] = "Variation"
-beauty <- kableExtra::kable(df, booktabs = TRUE, linesep = "") %>%
+beauty <- kableExtra::kable(df, booktabs = TRUE, linesep = "", caption = caption_text, label = label_text) %>%
+  kableExtra::row_spec(nrow(df), bold = TRUE, background = "#AFAFAF") %>%
   kableExtra::add_header_above(c("", "MONO"=3, "POLY"=3, "MEGA"=3)) %>%
   kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
 return(beauty)
+}
+
+build_nice_latex_table_no_mega <- function(df, caption_text = "", label_text = NULL) {
+# trash the data BUT looks exactly how it should for the paper
+# see https://stackoverflow.com/questions/13984470/possible-to-create-latex-multicolumns-in-xtable/28420723#28420723
+names(df)[2] = names(df)[5] = "Before"
+names(df)[3] = names(df)[6] = "After"
+names(df)[4] = names(df)[7] = "Variation"
+beauty <- kableExtra::kable(df, booktabs = TRUE, linesep = "", caption = caption_text, label = label_text) %>%
+  kableExtra::row_spec(nrow(df), bold = TRUE, background = "#AFAFAF") %>%
+  kableExtra::add_header_above(c("", "MONO"=3, "POLY"=3)) %>%
+  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
+return(beauty)
+}
+
+add_total_row <- function(df) {
+  df <- df %>% dplyr::mutate(across(!Benchmark, as.numeric))
+  mono_before <- sum(df$MONO_Before)
+  mono_after <- sum(df$MONO_After)
+  poly_before <- sum(df$POLY_Before)
+  poly_after <- sum(df$POLY_After)
+  mega_before <- sum(df$MEGA_Before)
+  mega_after <- sum(df$MEGA_After)
+  vec <- list("TOTAL", mono_before, mono_after, compute_evolution(mono_before, mono_after), poly_before, poly_after, compute_evolution(poly_before, poly_after), mega_before, mega_after, compute_evolution(mega_before, mega_after))
+  df[nrow(df) + 1,] <- vec
+  return(df)
+}
+
+add_total_row_split <- function(df) {
+  df <- df %>% dplyr::mutate(across(!Benchmark, as.numeric))
+  mono_mono <- sum(df$`MONO->MONO (=)`)
+  mono_mono_diff <- sum(df$`MONO->MONO (!=)`)
+  poly_mono <- sum(df$`POLY->MONO`)
+  vec <- list("TOTAL", mono_mono, mono_mono_diff, poly_mono)
+  df[nrow(df) + 1,] <- vec
+  return(df)
+}
+
+switch_last_two <- function(df) {
+  last <- df[nrow(df),]
+  second_last <- df[nrow(df) -1,]
+  df[nrow(df),] <- second_last
+  df[nrow(df) -1,] <- last
+  return(df)
 }
 
 ############################################## MERGED TABLES ############################################### 
@@ -119,7 +191,7 @@ data_tp_calls <- load_all_tables(folder_out, "TP", "Calls")
 data_tp_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
 
 data_split_calls <- load_all_tables(folder_out, "Split", "Calls")
-data_split_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
+data_split_call_sites <- load_all_tables(folder_out, "Split", "Call-Sites")
 
 data_split_transitions <- load_all_tables(folder_out, "Split", "Transitions", TRUE)
 data_split_transitions <- data_split_transitions %>% dplyr::arrange(Transition) %>% rename(Benchmark = Transition)  %>% select(-contains("..."))
@@ -132,44 +204,58 @@ table_data_split_calls <- rearrange_table(data_split_calls) %>% dplyr::arrange(B
 table_data_split_call_sites <- rearrange_table(data_split_call_sites) %>% dplyr::arrange(Benchmark)
 
 # Need to merge together the benchmarks with the same behavior
+table_data_tp_calls <- add_total_row(table_data_tp_calls)
 table_data_tp_calls <- combine_similar_benchmarks(table_data_tp_calls, "PsdUtil")
 table_data_tp_calls <- combine_similar_benchmarks(table_data_tp_calls, "PsdCompose")
 table_data_tp_calls <- combine_similar_benchmarks(table_data_tp_calls, "PsdImage")
 table_data_tp_calls <- combine_similar_benchmarks(table_data_tp_calls, "ChunkyCanvas")
 table_data_tp_calls <- combine_similar_benchmarks(table_data_tp_calls, "ChunkyColor")  %>% dplyr::arrange(Benchmark)
+table_data_tp_calls <- switch_last_two(table_data_tp_calls)
 
+table_data_tp_call_sites <- add_total_row(table_data_tp_call_sites)
 table_data_tp_call_sites <- combine_similar_benchmarks(table_data_tp_call_sites, "PsdUtil")
 table_data_tp_call_sites <- combine_similar_benchmarks(table_data_tp_call_sites, "PsdCompose")
 table_data_tp_call_sites <- combine_similar_benchmarks(table_data_tp_call_sites, "PsdImage")
 table_data_tp_call_sites <- combine_similar_benchmarks(table_data_tp_call_sites, "ChunkyCanvas")
 table_data_tp_call_sites <- combine_similar_benchmarks(table_data_tp_call_sites, "ChunkyColor")  %>% dplyr::arrange(Benchmark)
+table_data_tp_call_sites <- switch_last_two(table_data_tp_call_sites)
 
+blogRails_calls <- table_data_tp_calls %>% filter(Benchmark == "BlogRails")
+blogRails_call_sites <- table_data_tp_call_sites %>% filter(Benchmark == "BlogRails")
+
+table_data_split_calls <- add_total_row(table_data_split_calls)
 table_data_split_calls <- combine_similar_benchmarks(table_data_split_calls, "PsdUtil")
 table_data_split_calls <- combine_similar_benchmarks(table_data_split_calls, "PsdCompose")
 table_data_split_calls <- combine_similar_benchmarks(table_data_split_calls, "PsdImage")
 table_data_split_calls <- combine_similar_benchmarks(table_data_split_calls, "ChunkyCanvas")
 table_data_split_calls <- combine_similar_benchmarks(table_data_split_calls, "ChunkyColor")  %>% dplyr::arrange(Benchmark)
+table_data_split_calls <- switch_last_two(table_data_split_calls)
 
+table_data_split_call_sites <- add_total_row(table_data_split_call_sites)
 table_data_split_call_sites <- combine_similar_benchmarks(table_data_split_call_sites, "PsdUtil")
 table_data_split_call_sites <- combine_similar_benchmarks(table_data_split_call_sites, "PsdCompose")
 table_data_split_call_sites <- combine_similar_benchmarks(table_data_split_call_sites, "PsdImage")
 table_data_split_call_sites <- combine_similar_benchmarks(table_data_split_call_sites, "ChunkyCanvas")
 table_data_split_call_sites <- combine_similar_benchmarks(table_data_split_call_sites, "ChunkyColor")  %>% dplyr::arrange(Benchmark)
+table_data_split_call_sites <- switch_last_two(table_data_split_call_sites)
 
+data_split_transitions <- add_total_row_split(data_split_transitions)
 data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "PsdUtil")
 data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "PsdCompose")
 data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "PsdImage")
 data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "ChunkyCanvas")
 data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "ChunkyColor")  %>% dplyr::arrange(Benchmark)
+data_split_transitions <- switch_last_two(data_split_transitions)
 
 # and all latexed
-latex_tp_calls <- build_nice_latex_table(table_data_tp_calls)
-latex_tp_call_sites <- build_nice_latex_table(table_data_tp_call_sites)
+latex_tp_calls <- build_nice_latex_table_no_mega(table_data_tp_calls %>% select(-contains("MEGA")), "Addressing target polymorphism successfully reduce the amount of polymorphic calls by 62.8\\%", "tp_calls")
+latex_tp_call_sites <- build_nice_latex_table_no_mega(table_data_tp_call_sites %>% select(-contains("MEGA")), "Addressing target polymorphism: impact on the number of polymorphic call-sites", "tp_call_sites")
 
-latex_split_calls <- build_nice_latex_table(table_data_split_calls)
-latex_split_call_sites <- build_nice_latex_table(table_data_split_call_sites)
+latex_split_calls <- build_nice_latex_table_no_mega(table_data_split_calls %>% select(-contains("MEGA")), "Splitting deals with the remaining polymorphic calls, and monomorphize them all", "split_calls")
+latex_split_call_sites <- build_nice_latex_table_no_mega(table_data_split_call_sites %>% select(-contains("MEGA")), "Applying splitting: impact on the number of polymorphic call-sites", "split_call_sites")
 
-latex_data_split_transitions <- kableExtra::kable(data_split_transitions, booktabs = TRUE, linesep = "") %>%
+latex_data_split_transitions <- kableExtra::kable(data_split_transitions, booktabs = TRUE, linesep = "", caption = "A majority of splitting result in the call-sites having the same behavior before and after splitting, which is not ideal", label = "split_transitions") %>%
+  kableExtra::row_spec(nrow(data_split_transitions), bold = TRUE, background = "#AFAFAF") %>%
   kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
 
 ############################################## LATEX COMMAND GENERATION ##############################################
@@ -190,6 +276,13 @@ print(latex_split_calls)
 \def\TPCallSites{%
 <<TPCallSites, echo=FALSE, results='asis'>>=
 print(latex_tp_call_sites)
+  @
+  }%
+
+\def\CallSites{%
+<<CallSites, echo=FALSE, results='asis', fig.cap='Call-site optimizations impact on call-site behavior: data about call-sites', fig.subcap=c('Addressing target polymorphism: impact on the number of polymorphic call-sites', 'Applying splitting: impact on the number of polymorphic call-sites'), fig.ncol = 1>>=
+print(latex_tp_call_sites)
+print(latex_split_call_sites)
   @
   }%
   

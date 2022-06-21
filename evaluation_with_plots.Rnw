@@ -19,7 +19,7 @@ if (Sys.getenv("RSTUDIO") == "1") {
 source("./scripts/libraries.R", chdir=TRUE)
   
 data <- load_data_file(filename)
-#benchmark_name <- "db"
+data <- as_tibble(data)
 
 # split_truffle <- read.csv("./truffle_split_targets_toto", sep=",", row.names = NULL, col.names=c("Target","Times.Splitted", "Call.Type"))
 # split_truffle <- split_truffle %>%
@@ -45,7 +45,6 @@ data <- load_data_file(filename)
 # Num.Targets.Observed - The total number of different call-targets in this run (after lookup)
 
 ############################################## MAIN TABLE ############################################## 
-
 # remove any invalid data (extra logging info ignored by parsing)
 data <- clean_data_file(data, FALSE)
 
@@ -118,6 +117,9 @@ splitting_transition_summary_sites_real <- summarise_transition_sites(transition
 splitting_transition_summary_frequency <- summarise_transition_frequency(transition_data, Number.Splits)
   
 ############################################## MANUAL INSPECTION ############################################## 
+
+lfgjdlfjg <- total_w_splitting %>%
+            filter (Symbol == "capitalize" & CT.Address == 1504 & Source.Section == "/home/sopi/Documents/Side_projects/truffleruby/bench/logging/DocSplitting.rb:4:1:21")
   
   # to filter out by the number of targets and only keep polymoprhic call-sites 
   polymorphic_call_sites <- total_w_splitting %>%
