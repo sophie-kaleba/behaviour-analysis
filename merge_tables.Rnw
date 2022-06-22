@@ -116,26 +116,26 @@ combine_similar_benchmarks <- function(df, benchmark_prefix) {
   return(df)
 }
 
-build_nice_latex_table <- function(df, caption_text = "", label_text = NULL) {
+build_nice_latex_table <- function(df, label_text = NULL) {
 # trash the data BUT looks exactly how it should for the paper
 # see https://stackoverflow.com/questions/13984470/possible-to-create-latex-multicolumns-in-xtable/28420723#28420723
 names(df)[2] = names(df)[5] = names(df)[8] = "Before"
 names(df)[3] = names(df)[6] = names(df)[9] = "After"
 names(df)[4] = names(df)[7] = names(df)[10] = "Variation"
-beauty <- kableExtra::kable(df, booktabs = TRUE, linesep = "", caption = caption_text, label = label_text) %>%
+beauty <- kableExtra::kable(df, booktabs = TRUE, linesep = "", label = label_text) %>%
   kableExtra::row_spec(nrow(df), bold = TRUE, background = "#AFAFAF") %>%
   kableExtra::add_header_above(c("", "MONO"=3, "POLY"=3, "MEGA"=3)) %>%
   kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
 return(beauty)
 }
 
-build_nice_latex_table_no_mega <- function(df, caption_text = "", label_text = NULL) {
+build_nice_latex_table_no_mega <- function(df, label_text = NULL, caption_text = "") {
 # trash the data BUT looks exactly how it should for the paper
 # see https://stackoverflow.com/questions/13984470/possible-to-create-latex-multicolumns-in-xtable/28420723#28420723
 names(df)[2] = names(df)[4] = "Before"
-names(df)[3] = names(df)[5] = "Variation (in \\%)"
+names(df)[3] = names(df)[5] = "Variation \n (in %)"
 # names(df)[4] = names(df)[7] = "Variation"
-beauty <- kableExtra::kable(df, booktabs = TRUE, linesep = "", caption = caption_text, label = label_text, align = "r") %>%
+beauty <- kableExtra::kable(df, booktabs = TRUE, linesep = "", label = label_text, align = "r", caption = caption_text) %>%
   #kableExtra::row_spec(nrow(df), bold = TRUE, background = "#AFAFAF") %>%
   kableExtra::add_header_above(c("", "MONO"=2, "POLY"=2)) %>%
   kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
@@ -185,6 +185,29 @@ remove_after_column <- function(df) {
   df <- df %>%
     select(-contains("After"))
   return(df)
+}
+
+divide_the_tables <- function(df) {
+  df_mono <- df %>%
+    filter(POLY_Before == 0)
+  
+  df_poly <- df %>%
+  filter(POLY_Before != 0)
+  
+  return (list(df_mono, df_poly))
+}
+
+merge_the_mono <- function(df1, df2) {
+  calls <- df1 %>% 
+    select(Benchmark, MONO_Before) %>%
+    rename("Num.Calls" = "MONO_Before")
+  
+  call_sites <- df2 %>% 
+    select(Benchmark, MONO_Before) %>%
+    rename("Num.Call.Sites" = "MONO_Before")
+  
+  result <- join(calls, call_sites)
+  return(result)
 }
 
 ############################################## MERGED TABLES ############################################### 
@@ -249,48 +272,77 @@ data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "Ch
 data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "ChunkyColor")  %>% dplyr::arrange(Benchmark) %>% remove_after_column() %>% apply_big_numbers()
 #data_split_transitions <- switch_last_two(data_split_transitions)
 
+
+# distinguish polymoprhic benchmarks from monomoprhic benchmarks
+tp_calls <- divide_the_tables(table_data_tp_calls)
+tp_call_sites <- divide_the_tables(table_data_tp_call_sites)
+
+split_calls <- divide_the_tables(table_data_split_calls)
+split_call_sites <- divide_the_tables(table_data_split_call_sites)
+
+tp_mono <- merge_the_mono(tp_calls[[1]], tp_call_sites[[1]])
+split_mono <- merge_the_mono(split_calls[[1]], split_call_sites[[1]])
+
 # and all latexed
-latex_tp_calls <- build_nice_latex_table_no_mega(table_data_tp_calls %>% select(-contains("MEGA")), "Addressing target polymorphism successfully reduce the amount of polymorphic calls by 62.8\\%", "tp_calls")
-latex_tp_call_sites <- build_nice_latex_table_no_mega(table_data_tp_call_sites %>% select(-contains("MEGA")), "Addressing target polymorphism: impact on the number of polymorphic call-sites", "tp_call_sites")
+latex_tp_calls_poly <- build_nice_latex_table_no_mega(tp_calls[[2]] %>% select(-contains("MEGA")), label_text = "tp_calls_poly", "Eliminating target duplicates in the cache is very effective at reducing polymorphism: the amount of polymoprhic calls is reduced by 24.6 \\% minimum.")
+latex_tp_call_sites_poly <- build_nice_latex_table_no_mega(tp_call_sites[[2]] %>% select(-contains("MEGA")), label_text = "tp_call_sites_poly")
 
-latex_split_calls <- build_nice_latex_table_no_mega(table_data_split_calls %>% select(-contains("MEGA")), "Splitting deals with the remaining polymorphic calls, and monomorphize them all", "split_calls")
-latex_split_call_sites <- build_nice_latex_table_no_mega(table_data_split_call_sites %>% select(-contains("MEGA")), "Applying splitting: impact on the number of polymorphic call-sites", "split_call_sites")
+latex_split_calls_poly <- build_nice_latex_table_no_mega(split_calls[[2]] %>% select(-contains("MEGA")), label_text = "split_calls_poly", "Splitting succeds at completely monomorphizing the remaining polymoprhic calls")
+latex_split_call_sites_poly <- build_nice_latex_table_no_mega(split_call_sites[[2]] %>% select(-contains("MEGA")), label_text = "split_call_sites_poly", "Splitting succeds at completely monomorphizing the remaining polymoprhic calls")
 
-latex_data_split_transitions <- kableExtra::kable(data_split_transitions, booktabs = TRUE, linesep = "", caption = "A majority of splitting result in the call-sites having the same behavior before and after splitting, which is not ideal", label = "split_transitions", align = "r") %>%
+latex_tp_mono <- kableExtra::kable(tp_mono, booktabs = TRUE, linesep = "", label = "tp_mono", align = "r", caption = "The list of the monomorphic benchmarks of our set. The ones suffixed by a star have been aggregated due to their similar behavior: the values for Num.Calls and Num.Call.Sites are the average of the group.") %>%
+  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
+
+latex_split_mono <- kableExtra::kable(split_mono, booktabs = TRUE, linesep = "", label = "split_mono", align = "r", caption = "The list of the monomorphic benchmarks of our set. The ones suffixed by a star have been aggregated due to their similar behavior: the values for Num.Calls and Num.Call.Sites are the average of the group.") %>%
+  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
+
+latex_data_split_transitions <- kableExtra::kable(data_split_transitions, booktabs = TRUE, linesep = "", label = "split_transitions", align = "r", caption = "TODO - suggests oversplitting") %>%
   kableExtra::row_spec(nrow(data_split_transitions), bold = TRUE, background = "#AFAFAF") %>%
   kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
 
 ############################################## LATEX COMMAND GENERATION ##############################################
 
 @
-\def\SplitCallSites{%
-<<SplitCallSites, echo=FALSE, results='asis'>>=
-print(latex_split_call_sites)
+\def\SplitCallSitesPoly{%
+<<SplitCallSitesPoly, echo=FALSE, results='asis'>>=
+print(latex_split_call_sites_poly)
   @
   }%
   
-\def\SplitCalls{%
-<<SplitCalls, echo=FALSE, results='asis'>>=
-print(latex_split_calls)
+\def\SplitCallsPoly{%
+<<SplitCallsPoly, echo=FALSE, results='asis'>>=
+print(latex_split_calls_poly)
   @
   }%
 
-\def\TPCallSites{%
-<<TPCallSites, echo=FALSE, results='asis'>>=
-print(latex_tp_call_sites)
+\def\SplitMono{%
+<<SplitMono, echo=FALSE, results='asis'>>=
+print(latex_split_mono)
   @
   }%
 
+\def\TPCallSitesPoly{%
+<<TPCallSitesPoly, echo=FALSE, results='asis'>>=
+print(latex_tp_call_sites_poly)
+  @
+  }%
+
+\def\TPCallsPoly{%
+<<TPCallsPoly, echo=FALSE, results='asis'>>=
+print(latex_tp_calls_poly)
+  @
+  }%
+
+\def\TPMono{%
+<<TPMono, echo=FALSE, results='asis'>>=
+print(latex_tp_mono)
+  @
+  }%
+  
 \def\CallSites{%
-<<CallSites, echo=FALSE, results='asis', fig.cap='Call-site optimizations impact on call-site behavior: data about call-sites', fig.subcap=c('Addressing target polymorphism: impact on the number of polymorphic call-sites', 'Applying splitting: impact on the number of polymorphic call-sites'), fig.ncol = 1>>=
-print(latex_tp_call_sites)
-print(latex_split_call_sites)
-  @
-  }%
-  
-\def\TPCalls{%
-<<TPCalls, echo=FALSE, results='asis'>>=
-print(latex_tp_calls)
+<<CallSites, echo=FALSE, results='asis'>>=
+print(latex_tp_call_sites_poly)
+print(latex_split_call_sites_poly)
   @
   }%
   
