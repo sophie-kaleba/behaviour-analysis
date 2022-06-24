@@ -121,7 +121,7 @@ build_nice_latex_table <- function(df, label_text = NULL) {
 # see https://stackoverflow.com/questions/13984470/possible-to-create-latex-multicolumns-in-xtable/28420723#28420723
 names(df)[2] = names(df)[5] = names(df)[8] = "Before"
 names(df)[3] = names(df)[6] = names(df)[9] = "After"
-names(df)[4] = names(df)[7] = names(df)[10] = "Variation"
+names(df)[4] = names(df)[7] = names(df)[10] = "Change \n (in %)"
 beauty <- kableExtra::kable(df, booktabs = TRUE, linesep = "", label = label_text) %>%
   kableExtra::row_spec(nrow(df), bold = TRUE, background = "#AFAFAF") %>%
   kableExtra::add_header_above(c("", "MONO"=3, "POLY"=3, "MEGA"=3)) %>%
@@ -133,7 +133,7 @@ build_nice_latex_table_no_mega <- function(df, label_text = NULL, caption_text =
 # trash the data BUT looks exactly how it should for the paper
 # see https://stackoverflow.com/questions/13984470/possible-to-create-latex-multicolumns-in-xtable/28420723#28420723
 names(df)[2] = names(df)[4] = "Before"
-names(df)[3] = names(df)[5] = "Variation \n (in %)"
+names(df)[3] = names(df)[5] = "Change \n (in %)"
 # names(df)[4] = names(df)[7] = "Variation"
 beauty <- kableExtra::kable(df, booktabs = TRUE, linesep = "", label = label_text, align = "r", caption = caption_text) %>%
   #kableExtra::row_spec(nrow(df), bold = TRUE, background = "#AFAFAF") %>%
