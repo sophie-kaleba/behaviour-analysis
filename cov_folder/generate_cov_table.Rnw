@@ -1,0 +1,64 @@
+%!TEX root = paper.tex
+<<knitr-load, echo=FALSE, include=FALSE>>=
+if (Sys.getenv("RSTUDIO") == "1") {
+    setwd("/home/sopi/Documents/Side_projects/behaviour-analysis/")
+} else {
+   opts_chunk$set(
+    fig.path="./figure/",
+    fig.keep='all',
+    dev=c('tikz'), #dev='pdf',c('tikz', 'svg'),
+    dev.args=list(pointsize=8, timestamp = FALSE),
+    echo=FALSE,
+    external=FALSE,
+    tidy=FALSE)
+
+  ## Make sure that TikZDevice is used for measuring size of latex labels
+  options(device = function(...) tikzDevice::tikz(tempfile(), ...))
+}
+source("../scripts/libraries.R", chdir=TRUE)
+  
+# data_global <- read.csv("./reports/Acid_global.csv", sep=" ", header=FALSE, col.names=c("Benchmark", "Total.Lines", "Lines.Coverage", "Total.Fn", "Fn.Coverage"), fill=TRUE)
+# data_detailed <- read.csv("./reports/Acid_detailed.csv", sep=" ", header=FALSE, col.names=c("Folder", "Lines.Covered", "Total.Lines", "Fn.Covered", "Total.Fn"), fill=TRUE)
+# 
+# # add the percentage of coverage per folder for data_detailed
+# data_detailed <- data_detailed %>%
+#   dplyr::mutate("Lines.Coverage" = round((data_detailed$Lines.Covered / data_detailed$Total.Lines) * 100, 1), "Fn.Coverage" = round((data_detailed$Fn.Covered / data_detailed$Total.Fn) * 100, 1))
+  
+
+folder_out <- "./reports/parsed_reports/global"
+
+############################################## UTILS ###############################################  
+
+load_data_file <- function(filename) {
+  col_names <- c("Benchmark", "LOC", "LOC.Cov", "Num.Fn", "Fn.Cov")
+  result <- read.csv(filename, sep=" ", strip.white = TRUE, header=FALSE, col.names = col_names, fill = TRUE)
+}
+
+load_all_tables <- function (folder) { 
+  result <- NULL
+  folder <- file.path(folder_out)
+  files <- sort(list.files(folder))
+  options(warn=-1)
+  
+  for (f in files) {
+      data <- load_data_file(file.path(folder, f))
+      result <- rbind(data, result)
+    }
+  result$Benchmark <- revalue(result$Benchmark, 
+                      c("AsciidoctorConvertSmall"  = "ADConvert",
+                      "AsciidoctorLoadFileSmall" = "ADLoadFile",        
+                      "BlogRailsRoutesTwoRoutesTwoRequests" = "BlogRails",             
+                      "ChunkyDecodePngImagePass" = "ChunkyDec",                    
+                      "FannkuchRedux" = "Fannkuch",                                          
+                      "ImageDemoConv" = "ImgDemoConv",
+                      "ImageDemoSobel" = "ImgDemoSobel",                 
+                      "LeeBench" = "Lee",       
+                      "SinatraHello" = "Sinatra"))
+  return(result)
+}
+
+final_table <- load_all_tables(folder_out) %>% dplyr::arrange(Benchmark)
+
+#aggregate the very similar benchmarks
+
+#add the mex number of receivers

@@ -7,7 +7,7 @@ filename = args[3]
 
 writeLines(paste("[INFO] Generate the csv for",benchmark_name,"located at",filename,". Generate the csv at",folder_out))
   
-data <- load_data_file(filename)
+data <- load_data_file("./results/07-06-22_16-08-09/BlogRailsRoutesTwoRoutesTwoRequests_Jun07-2022_20:50:52/parsed_BlogRailsRoutesTwoRoutesTwoRequests.mylog")
 data <- as_tibble(data)
 
 
@@ -66,12 +66,18 @@ gc()
 # this generates a faceted plot, each facet being the target adress(es), for a couple {Source.Section, symbol}
 plot_calls <- function(ss, symb) {
   filtered_data <- polymorphic_call_sites %>% filter(Source.Section == ss & Symbol == symb)
-  p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, color=Observed.Receiver)) + geom_point(size = 0.5, alpha = 0.4) 
-  p <- p + xlab("Call ID") + ylab("Target") + theme(legend.position = "none") + ggtitle(paste("Selector: ",filtered_data$Symbol, ", in source: ", filtered_data$Source.Section))
-    p <- p + theme(text = element_text(size=10)) 
+  split_callSite <- strsplit(ss, "/", fixed=TRUE)
+  p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, shape=Observed.Receiver, size=Observed.Receiver)) + geom_point(size = 2, alpha = 0.4) 
+  p <- p + xlab("Call ID") + ylab("Target")  + ggtitle(paste(filtered_data$Symbol, ", in ", tail(split_callSite[[1]], 1)))
+    p <- p  + theme_bw() + theme(legend.position = "none")+ theme(text = element_text(size=40))
  return (p)
 }
 
+ss <- "/home/sopi/Documents/Side_projects/truffleruby/bench/railsbench/bundle/truffleruby/3.0.2.10/gems/activesupport-6.0.4.4/lib/active_support/callbacks.rb:98:1:42"
+symb <- "__callbacks"
+
+pr <- plot_calls(ss, symb)
+pr
 
 f <- function(row) {
   ss <- row['Source.Section']
