@@ -6,7 +6,10 @@ folder_out = file.path(getwd(),args[2],"results")
 filename = args[3]
 
 writeLines(paste("[INFO] Generate the csv for",benchmark_name,"located at",filename,". Generate the csv at",folder_out))
-  
+
+folder_out <- "/home/sopi/Documents/Side_projects/behaviour-analysis/results/07-06-22_16-08-09/results"
+benchmark_name <- "BlogRailsRoutesTwoRoutesTwoRequests"
+filename <- "./results/07-06-22_16-08-09/BlogRailsRoutesTwoRoutesTwoRequests_Jun07-2022_20:50:52/parsed_BlogRailsRoutesTwoRoutesTwoRequests.mylog"
 data <- load_data_file(filename)
 data <- as_tibble(data)
 
@@ -15,6 +18,24 @@ gc()
 ############################################## MAIN TABLE ############################################## 
 # remove any invalid data (extra logging info ignored by parsing)
 data <- clean_data_file(data, FALSE)
+ 
+# Build a summary table, structure as follows:
+# vvvvvvvvvvvvvvvvvvvvvvvvvvvv     MONOMOPRHIC                POLYMOPRHIC                 MEGAMOPRHIC
+# vvvvvvvvvvvvvvvvvvvvvvvvvvvv #Calls #Call.Sites       #Calls       #Call.Sites       #Calls       #Call.Sites
+# Benchmark #Calls #Call.Sites   1        1        1 2 3 4 5 6 7 8  1 2 3 4 5 6 7 8      9 10 ...     9 10 ...
+# This table should be generated 2 times: 1 before applying any optimisations, 1 after TP, and one after splitting, which means ...
+# it should be applied on 3 different tables
+# We should ouput a csv containing this table, that will later be read and aggregated with other benchmarks
+# The merging should auto fill missing columns with 0s (not NAs)
+
+
+
+# In addition to this table, it would be nice to have a table listing the different call-sites of a benchmark, as well as their different receivers throughout runtime?
+# Again, 3 different tables
+# In essence:
+# Benchmark Lexical.Location Symbol Cache.State Receivers 
+
+
 
 gc()
 
@@ -55,6 +76,16 @@ compute_before_after <- function(df, cache_status_int, call_or_site) {
       result <- d$Sum
       if (is.empty(result)) {
         return(0)
+    }
+    return (result)
+  }
+  else if (cache_status_int == 9) {
+    d <- df %>%
+      filter(Num.Receiver >= 9) %>%
+      dplyr::summarise(Sum=sum(!! sym(call_or_site)))
+    result <- d$Sum
+    if (is.empty(result)) {
+      return(0)
     }
     return (result)
   }
