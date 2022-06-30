@@ -17,26 +17,15 @@ data <- clean_data_file(data, FALSE) # remove any invalid data (extra logging in
 receivers_overview <- add_number_receivers(data, c(Call.Site, "Benchmark")) 
 
 # These 3 tables should be feed as input to build table one and table two
-before_all_optim <- receivers_overview %>% select(-Num.Receiver.Observed) %>% rename(Num.Receivers = Num.Receiver.Original) #focus on Num.Receiver.Original
-after_tp <- receivers_overview %>% select(-Num.Receiver.Original) %>% rename(Num.Receivers = Num.Receiver.Observed) #focus on Num.Receiver.Observed
-after_splitting <- add_number_receivers(data, c(Call.Site.Target, "Benchmark")) %>% select(-Num.Receiver.Original) %>% rename(Num.Receivers = Num.Receiver.Observed) #after tp has been addressed
+before_all_optim <- receivers_overview %>% select(-Num.Receiver.Observed) %>% rename(Num.Receiver = Num.Receiver.Original) #focus on Num.Receiver.Original
+after_tp <- receivers_overview %>% select(-Num.Receiver.Original) %>% rename(Num.Receiver = Num.Receiver.Observed) #focus on Num.Receiver.Observed
+after_splitting <- add_number_receivers(data, c(Call.Site.Target, "Benchmark")) %>% select(-Num.Receiver.Original) %>% rename(Num.Receiver = Num.Receiver.Observed) #after tp has been addressed
 
 mutate_per_state <- function(df, type_of_receiver) {
   result <- df %>%
     group_by_at(type_of_receiver) %>%
     dplyr::summarise(Num.Calls = n_distinct(Call.ID), Num.Call.Sites = n_distinct(Source.Section, Symbol))
   return (result)
-}
-
-generate_table_one <- function(df, benchmark_name) {
-  table_one <- mutate_per_state(df, "Num.Receivers") 
-  table_one <- tidyr::pivot_wider(table_one, 
-                                  names_glue = "{Num.Receivers}_{.value}",
-                                  names_from = Num.Receivers, 
-                                  values_from = c(Num.Calls, Num.Call.Sites)
-  ) 
-  table_one$Benchmark = benchmark_name
-  return(table_one)
 }
 
 ###### SUMMARY TABLE ONE
@@ -49,22 +38,44 @@ generate_table_one <- function(df, benchmark_name) {
 # We should ouput a csv containing this table, that will later be read and aggregated with other benchmarks
 # The merging should auto fill missing columns with 0s (not NAs)
 
+generate_table_one <- function(df, benchmark_name) {
+  table_one <- mutate_per_state(df, "Num.Receiver") 
+  table_one <- tidyr::pivot_wider(table_one, 
+                                  names_glue = "{Num.Receiver}_{.value}",
+                                  names_from = Num.Receiver, 
+                                  values_from = c(Num.Calls, Num.Call.Sites)
+  ) 
+  table_one$Benchmark = benchmark_name
+  return(table_one)
+}
+
 table_one_before <- generate_table_one(before_all_optim, benchmark_name)
 table_one_tp <- generate_table_one(after_tp, benchmark_name)
 table_one_splitting <- generate_table_one(after_splitting, benchmark_name)
 #table_one <- table_one %>% select(order(colnames(table_one)))
 
-
+###### SUMMARY TABLE TWO
+# Table summarizing the amount of call sites being mono, poly, mega
 # In addition to this table, it would be nice to have a table listing the different call-sites of a benchmark, as well as their different receivers throughout runtime?
 # Again, 3 different tables
 # In essence:
 # Benchmark Lexical.Location Symbol Cache.State Receivers 
 
+generate_table_two <- function(df, receiver_to_ditch, receveiver_to_keep, call_site_type, keep_ct = NULL) {
+  table_two <- df %>%
+    select(-{{receiver_to_ditch}}, -Call.ID, -Builtin.) %>%
+    select(Benchmark, Source.Section, Symbol, {{receveiver_to_keep}}, all_of(keep_ct), Num.Receiver) %>%
+    add_lookup_status(call_site_type) %>%
+    distinct() %>%
+    arrange(Source.Section, Symbol, {{receveiver_to_keep}}, Num.Receiver)
+  return(table_two)
+}
+
+table_two_before <- generate_table_two(before_all_optim, Observed.Receiver, Original.Receiver, Call.Site) %>% filter(Cache.Type != "MONO")
+table_two_tp <- generate_table_two(after_tp, Original.Receiver, Observed.Receiver, Call.Site) %>% filter(Cache.Type != "MONO")
+table_two_spliting <- generate_table_two(after_splitting, Original.Receiver, Observed.Receiver, Call.Site.Target, "CT.Address") %>% filter(Cache.Type != "MONO")
 
 
-gc()
-###### SUMMARY TABLE TWO
-# Table summarizing the amount of call sites being mono, poly, mega
 total_w_splitting <- add_number_receivers(data, c(Call.Site.Target, "Benchmark"))
 total_wo_splitting <- add_number_receivers(data, c(Call.Site, "Benchmark"))
 
