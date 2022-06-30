@@ -1,7 +1,7 @@
 %!TEX root = paper.tex
 <<knitr-load, echo=FALSE, include=FALSE>>=
 if (Sys.getenv("RSTUDIO") == "1") {
-    setwd("/home/sopi/Documents/Side_projects/behaviour-analysis/")
+    setwd("/home/sopi/Documents/Side_projects/behaviour-analysis/cov_folder/")
 } else {
    opts_chunk$set(
     fig.path="./figure/",
@@ -26,11 +26,12 @@ source("../scripts/libraries.R", chdir=TRUE)
   
 
 folder_out <- "./reports/parsed_reports/global"
+folder_out_poly <- "../results/07-06-22_16-08-09/CLOSURES/results/Poly/"
 
 ############################################## UTILS ###############################################  
 
 load_data_file <- function(filename) {
-  col_names <- c("Benchmark", "LOC", "LOC.Cov", "Num.Fn", "Fn.Cov")
+  col_names <- c("Benchmark", "LOC", "LOC.Covered", "Fn", "Fn.Covered")
   result <- read.csv(filename, sep=" ", strip.white = TRUE, header=FALSE, col.names = col_names, fill = TRUE)
 }
 
@@ -57,8 +58,101 @@ load_all_tables <- function (folder) {
   return(result)
 }
 
+load_data_file_poly <- function(filename) {
+  col_names <- c("Benchmark", "Max.Num.Of.Receivers")
+  result <- read.csv(filename, sep=" ", strip.white = TRUE, header=FALSE, col.names = col_names, fill = TRUE)
+}
+
+load_all_tables_poly <- function (folder) { 
+  result <- NULL
+  folder <- file.path(folder_out_poly)
+  print(folder)
+  files <- sort(list.files(folder))
+  options(warn=-1)
+  
+  for (f in files) {
+      print(f)
+      data <- load_data_file_poly(file.path(folder, f))
+      result <- rbind(data, result)
+    }
+  result$Benchmark <- revalue(result$Benchmark, 
+                      c("AsciidoctorConvertSmall"  = "ADConvert",
+                      "AsciidoctorLoadFileSmall" = "ADLoadFile",        
+                      "BlogRailsRoutesTwoRoutesTwoRequests" = "BlogRails",             
+                      "ChunkyDecodePngImagePass" = "ChunkyDec",                    
+                      "FannkuchRedux" = "Fannkuch",                                          
+                      "ImageDemoConv" = "ImgDemoConv",
+                      "ImageDemoSobel" = "ImgDemoSobel",                 
+                      "LeeBench" = "Lee",       
+                      "SinatraHello" = "Sinatra"))
+  return(result)
+}
+
+# Here we'll collapse together: all the PSDUtil, PSDImage, PSDCompose and ChunkyColor
+combine_similar_benchmarks <- function(df, benchmark_prefix) {
+  table_mean <- df %>%
+      filter(str_detect(Benchmark, benchmark_prefix)) %>%
+      dplyr::mutate(across(!Benchmark, as.numeric)) %>%
+      dplyr::summarise(across(!Benchmark, mean)) %>%
+      dplyr::mutate_if(is.numeric, round, 0) %>%
+      as.data.frame()
+  row.names(table_mean) <- "Mean"
+  
+#  table_mean[1,]<-paste("≈", table_mean[1,], sep="")
+  
+  table_mean$Benchmark <- paste(benchmark_prefix,"*", sep="")
+  row.names(table_mean) <- NULL
+  
+  df <- df %>% 
+    filter(!str_detect(Benchmark, benchmark_prefix))
+    
+  df <- rbind(df, table_mean)
+  
+  return(df)
+}
+
+apply_big_numbers <- function(df) {
+   df <-   df %>% 
+      dplyr::mutate(across(!Benchmark, as.numeric)) %>%
+      purrr::map_df(prettyNum ,big.interval = 3,  big.mark = ",")
+   return(df)
+}
+
 final_table <- load_all_tables(folder_out) %>% dplyr::arrange(Benchmark)
+#add the mex number of receivers
+poly_table <- load_all_tables_poly(folder_out_poly) %>% dplyr::arrange(desc(Max.Num.Of.Receivers)) 
+poly_table%>% dplyr::filter(Max.Num.Of.Receivers > 1)
 
 #aggregate the very similar benchmarks
+complete_table <- join(final_table, poly_table)
+num_total_benchs <- nrow(complete_table) #do it before aggregating
 
-#add the mex number of receivers
+poly <- read.csv("../ ./poly_call_sites.csv", sep=";", strip.white = TRUE, header=TRUE, fill = TRUE) %>% rename("Num.Of.Poly.Call.Sites" = "POLY_Before")
+complete_table <- join(complete_table, poly)
+
+complete_table <- combine_similar_benchmarks(complete_table, "PsdUtil")
+complete_table <- combine_similar_benchmarks(complete_table, "PsdCompose")
+complete_table <- combine_similar_benchmarks(complete_table, "PsdRenderer")
+complete_table <- combine_similar_benchmarks(complete_table, "PsdImage")
+complete_table <- combine_similar_benchmarks(complete_table, "ChunkyCanvas")
+complete_table <- combine_similar_benchmarks(complete_table, "ChunkyOperations")
+complete_table <- combine_similar_benchmarks(complete_table, "ChunkyColor") %>% dplyr::arrange(desc(Max.Num.Of.Receivers))  %>% apply_big_numbers()
+
+# generate latex
+latex_table <- kableExtra::kable(complete_table, booktabs = TRUE, linesep = "", label = "metrics", align = "r", caption = "Around 60 \\% of all lines of code including libs are executed, which equates to a 20 \\% coverage of all methods. \\NumsPoly benchmarks are polymorphic, over a total of \\NumsBench benchmarks: the majority of them are industrial benchmarks. The benchmarks *-suffixed have been aggregated due to their similar behavior, and their values have been averaged.",  col.names = c("Benchmark", "LOC", "LOC.Covered(%)", "Fn", "Fn.Covered(%)", "Max # of receivers", "# poly call-sites")) %>%
+  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
+
+num_poly_bench <- complete_table %>%
+  mutate(across(!Benchmark, as.numeric )) %>%
+  filter(Max.Num.Of.Receivers > 1)
+num_poly_bench <- nrow(num_poly_bench)
+
+@
+\def\Metrics{%
+<<SplitCallSitesPoly, echo=FALSE, results='asis'>>=
+print(latex_table)
+  @
+  }%
+  
+\newcommand{\NumsBench}{$\Sexpr{num_total_benchs}$\xspace}
+\newcommand{\NumsPoly}{$\Sexpr{num_poly_bench}$\xspace}

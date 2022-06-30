@@ -1,0 +1,29 @@
+source("./scripts/libraries.R", chdir=TRUE)
+
+args = commandArgs(trailingOnly=TRUE)
+benchmark_name = args[1]
+folder_out = file.path(getwd(),args[2],"results")
+filename = args[3]
+
+writeLines(paste("[INFO] Generate the csv for",benchmark_name,"located at",filename,". Generate the csv at",folder_out))
+
+data <- load_data_file(filename)
+data <- as_tibble(data)
+
+############################################## MAIN TABLE ############################################## 
+# remove any invalid data (extra logging info ignored by parsing)
+data <- clean_data_file(data, TRUE)
+
+# Table summarizing the amount of call sites being mono, poly, mega
+total_wo_splitting <- add_number_receivers(data, c(Call.Site, "Benchmark"))
+
+num_target_original_wo_splitting <- compute_num_target_details(total_wo_splitting, Call.Site,  "Original.Receiver")
+max_receiver <- num_target_original_wo_splitting[nrow(num_target_original_wo_splitting),]$Num.Receiver
+
+final <- t(c(benchmark_name, max_receiver))
+
+write_on_disk <- function(df, name, path = "") {
+  write.table(df,paste(path,paste(benchmark_name, name,".csv",sep="-"), sep="/"), col.names = FALSE, row.names = FALSE) 
+}
+
+write_on_disk(final, "maxReceiver", file.path(folder_out,"Poly"))

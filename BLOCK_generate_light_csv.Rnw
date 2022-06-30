@@ -1,0 +1,123 @@
+source("./scripts/libraries.R", chdir=TRUE)
+
+args = commandArgs(trailingOnly=TRUE)
+benchmark_name = args[1]
+folder_out = file.path(getwd(),args[2],"results")
+filename = args[3]
+
+writeLines(paste("[INFO] Generate the csv for",benchmark_name,"located at",filename,". Generate the csv at",folder_out))
+  
+data <- load_data_file(filename)
+data <- as_tibble(data)
+
+############################################## MAIN TABLE ############################################## 
+# remove any invalid data (extra logging info ignored by parsing)
+data <- clean_data_file(data, TRUE)
+data$Symbol <- "closure"
+
+# Table summarizing the amount of call sites being mono, poly, mega
+total_w_splitting <- add_number_receivers(data, c(Call.Site.Target, "Benchmark"))
+total_wo_splitting <- add_number_receivers(data, c(Call.Site, "Benchmark"))
+
+num_target_original_wo_splitting <- compute_num_target_details(total_wo_splitting, Call.Site,  "Original.Receiver")
+num_target_original_w_splitting <- compute_num_target_details(total_w_splitting, Call.Site.Target,  "Original.Receiver")
+
+total_w_splitting <- add_lookup_status_per_call(total_w_splitting)
+total_wo_splitting <- add_lookup_status_per_call(total_wo_splitting)
+
+# Required for splitting
+transition_data <- analyse_splitting_transitions(total_w_splitting, benchmark_name, Call.Site, Call.Site.Target)
+splitting_transition_summary_sites <- summarise_transition_sites(transition_data)
+splitting_transition_summary_sites <- as.data.frame(t(splitting_transition_summary_sites))
+
+max_receiver <- num_target_original_wo_splitting[nrow(num_target_original_wo_splitting),]$Num.Receiver
+final <- t(c(benchmark_name, max_receiver))
+
+############################################## AGGREGATED STATISTICS ###############################################   
+compute_cache_status <- function(df, num_entries) {
+  return (which(rownames(df) == num_entries))
+}
+
+compute_amount_calls_sites <- function(df, call_or_site) {
+  return (which(colnames(df) == call_or_site))
+}
+
+compute_before_after <- function(df, cache_status_int, call_or_site) {
+  if (cache_status_int == 2) {
+    d <- df %>%
+      filter(Num.Receiver >= 2 & Num.Receiver <= 8) %>%
+      dplyr::summarise(Sum=sum(!! sym(call_or_site)))
+      result <- d$Sum
+      if (is.empty(result)) {
+        return(0)
+    }
+    return (result)
+  }
+  cache_status <- compute_cache_status(df, cache_status_int)
+  row_call_site <- compute_amount_calls_sites(df, call_or_site)
+  result <- df[cache_status,row_call_site][[call_or_site]]
+  if (is.empty(result)) {
+    return(0)
+    }
+  return (result)
+}
+
+compute_evolution <- function(before, after) {
+  if (before == 0) {return(0)}
+  return (round(((after - before) / before) * 100,  digits = 1))
+}
+
+write_on_disk <- function(df, name, path = "") {
+ write.table(df,paste(path,paste(benchmark_name, name,".csv",sep="-"), sep="/"), col.names = FALSE, row.names = FALSE) 
+}
+
+write_on_disk_split <- function(df, name, path = "") {
+ write.table(df,paste(path,paste(benchmark_name, name,".csv",sep="-"), sep="/"), col.names = FALSE, row.names = TRUE, sep=";") 
+}
+
+# Target polymorphism - calls
+before <- compute_before_after(num_target_original_wo_splitting, 1, "Num.Calls")
+after <- compute_before_after(num_target_original_w_splitting, 1, "Num.Calls")
+split_calls_mono <- c(benchmark_name, before, after, compute_evolution(before, after), "MONO")
+
+before <- compute_before_after(num_target_original_wo_splitting, 2, "Num.Calls")
+after <- compute_before_after(num_target_original_w_splitting, 2, "Num.Calls")
+split_calls_poly <- c(benchmark_name, before, after, compute_evolution(before, after), "POLY")
+
+before <- compute_before_after(num_target_original_wo_splitting, 9, "Cumulative.Calls")
+after <- compute_before_after(num_target_original_w_splitting, 9, "Cumulative.Calls")
+split_calls_mega <- c(benchmark_name, before, after, compute_evolution(before, after), "MEGA")
+
+# Target polymoprhism - call sites
+before <- compute_before_after(num_target_original_wo_splitting, 1, "Num.Call.Sites")
+after <- compute_before_after(num_target_original_w_splitting, 1, "Num.Call.Sites")
+split_call_sites_mono <- c(benchmark_name, before, after, compute_evolution(before, after), "MONO")
+
+before <- compute_before_after(num_target_original_wo_splitting, 2, "Num.Call.Sites")
+after <- compute_before_after(num_target_original_w_splitting, 2, "Num.Call.Sites")
+split_call_sites_poly <- c(benchmark_name, before, after, compute_evolution(before, after), "POLY")
+
+before <- compute_before_after(num_target_original_wo_splitting, 9, "Cumulative.Call.Sites")
+after <- compute_before_after(num_target_original_w_splitting, 9, "Cumulative.Call.Sites")
+split_call_sites_mega <- c(benchmark_name, before, after, compute_evolution(before, after), "MEGA")
+
+############################################## SAVE AS CSV ###############################################
+
+if (!dir.exists(file.path(folder_out,"Split"))) {
+  dir.create(file.path(folder_out,"Split","Calls"), recursive = TRUE)
+  dir.create(file.path(folder_out,"Split","Call-Sites"), recursive = TRUE)
+  dir.create(file.path(folder_out,"Split","Transitions"), recursive = TRUE)
+  dir.create(file.path(folder_out,"Poly"), recursive = TRUE)
+}
+
+write_on_disk(final, "maxReceiver", file.path(folder_out,"Poly"))
+
+write_on_disk(split_calls_mono, "split_calls_mono", file.path(folder_out,"Split","Calls"))
+write_on_disk(split_calls_poly, "split_calls_poly", file.path(folder_out,"Split","Calls"))
+write_on_disk(split_calls_mega, "split_calls_mega", file.path(folder_out,"Split","Calls"))
+
+write_on_disk(split_call_sites_mono, "split_call_site_mono", file.path(folder_out,"Split","Call-Sites"))
+write_on_disk(split_call_sites_poly, "split_call_site_poly", file.path(folder_out,"Split","Call-Sites"))
+write_on_disk(split_call_sites_mega, "split_call_site_mega", file.path(folder_out,"Split","Call-Sites"))
+
+write_on_disk_split(splitting_transition_summary_sites, "splitting_transition_summary_sites", file.path(folder_out,"Split","Transitions"))

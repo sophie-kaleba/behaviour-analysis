@@ -95,6 +95,14 @@ PSD=(
 	 "PsdUtilPad4"
 )
 
+BIG=("SinatraHello"
+	"MailBench"
+	"ERubiRails"
+	"BlogRailsRoutesTwoRoutesTwoRequests"
+	"PsdImagemodeGreyscaleCombineGreyscaleChannel"
+	"ChunkyCanvasResamplingNearestNeighbor"
+)
+
 # for b in ${TRUBY[@]}; do
 # 	make benchmark_name=$b iterations="1" inner_iterations="1" FOLDER=$FOLDER all
 # 	wait $!
@@ -125,8 +133,15 @@ PSD=(
 # 	wait $!
 # done
 
+# for b in ${BIG[@]}; do
+# 	make benchmark_name=$b iterations="1" inner_iterations="1" FOLDER=$FOLDER parse
+# 	wait $!
+# done
+
 #must have more memory
-make benchmark_name="Havlak" iterations="1" inner_iterations="1" FLAGS="--vm.Xss6m" FOLDER=$FOLDER all
+#make benchmark_name="Havlak" iterations="1" inner_iterations="1" FLAGS="--vm.Xss6m" FOLDER=$FOLDER all
 
 # is special regarding the number of inner iterations
 # make benchmark_name="CD" iterations="1" inner_iterations="250" FOLDER=$FOLDER all
+
+Rscript knit.R generate_cov_table.Rnw metrics_tables.tex 

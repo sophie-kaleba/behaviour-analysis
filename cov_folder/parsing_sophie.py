@@ -33,7 +33,7 @@ def get_start_str(start_lines):
 
 def parse_bench_group(group):
     def parse_bench_line(l):
-        return l[l.index('|') + 1:-13].replace('|', ' ').replace('%', '').split()
+        return l[l.index('|') + 1:- (len(l) - l.rindex('|'))].replace('|', ' ').replace('%', '').split()
 
     g_data = [group[0][1:-1]]
     sum_line_covered, sum_line_full = 0, 0

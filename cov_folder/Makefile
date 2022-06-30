@@ -16,7 +16,7 @@ run:
 
 parse:
 	echo "[REPORT COVERAGE...]"
-	lcov --summary ./coverage/${benchmark_name}.info >> ./reports/${benchmark_name}_cov.txt 2>&1
-	lcov --list ./coverage/${benchmark_name}.info >> ./reports/${benchmark_name}_cov.txt 2>&1
+#	lcov --summary ./coverage/${benchmark_name}.info >> ./reports/${benchmark_name}_cov.txt 2>&1
+#	lcov --list ./coverage/${benchmark_name}.info >> ./reports/${benchmark_name}_cov.txt 2>&1
 	python3 parsing_sophie.py ./reports/${benchmark_name}_cov.txt ./reports/parsed_reports/global/${benchmark_name}_global.csv ./reports/parsed_reports/detailed/${benchmark_name}_detailed.csv  
 	echo "[REPORT COVERAGE... DONE]"
