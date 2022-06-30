@@ -11,23 +11,48 @@ folder_out <- "/home/sopi/Documents/Side_projects/behaviour-analysis/results/07-
 benchmark_name <- "BlogRailsRoutesTwoRoutesTwoRequests"
 filename <- "./results/07-06-22_16-08-09/BlogRailsRoutesTwoRoutesTwoRequests_Jun07-2022_20:50:52/parsed_BlogRailsRoutesTwoRoutesTwoRequests.mylog"
 data <- load_data_file(filename)
-data <- as_tibble(data)
+data <- clean_data_file(data, FALSE) # remove any invalid data (extra logging info ignored by parsing)
 
-gc()
+############################################## MAIN TABLES ############################################## 
+receivers_overview <- add_number_receivers(data, c(Call.Site, "Benchmark")) 
 
-############################################## MAIN TABLE ############################################## 
-# remove any invalid data (extra logging info ignored by parsing)
-data <- clean_data_file(data, FALSE)
- 
+# These 3 tables should be feed as input to build table one and table two
+before_all_optim <- receivers_overview %>% select(-Num.Receiver.Observed) %>% rename(Num.Receivers = Num.Receiver.Original) #focus on Num.Receiver.Original
+after_tp <- receivers_overview %>% select(-Num.Receiver.Original) %>% rename(Num.Receivers = Num.Receiver.Observed) #focus on Num.Receiver.Observed
+after_splitting <- add_number_receivers(data, c(Call.Site.Target, "Benchmark")) %>% select(-Num.Receiver.Original) %>% rename(Num.Receivers = Num.Receiver.Observed) #after tp has been addressed
+
+mutate_per_state <- function(df, type_of_receiver) {
+  result <- df %>%
+    group_by_at(type_of_receiver) %>%
+    dplyr::summarise(Num.Calls = n_distinct(Call.ID), Num.Call.Sites = n_distinct(Source.Section, Symbol))
+  return (result)
+}
+
+generate_table_one <- function(df, benchmark_name) {
+  table_one <- mutate_per_state(df, "Num.Receivers") 
+  table_one <- tidyr::pivot_wider(table_one, 
+                                  names_glue = "{Num.Receivers}_{.value}",
+                                  names_from = Num.Receivers, 
+                                  values_from = c(Num.Calls, Num.Call.Sites)
+  ) 
+  table_one$Benchmark = benchmark_name
+  return(table_one)
+}
+
+###### SUMMARY TABLE ONE
 # Build a summary table, structure as follows:
 # vvvvvvvvvvvvvvvvvvvvvvvvvvvv     MONOMOPRHIC                POLYMOPRHIC                 MEGAMOPRHIC
 # vvvvvvvvvvvvvvvvvvvvvvvvvvvv #Calls #Call.Sites       #Calls       #Call.Sites       #Calls       #Call.Sites
-# Benchmark #Calls #Call.Sites   1        1        1 2 3 4 5 6 7 8  1 2 3 4 5 6 7 8      9 10 ...     9 10 ...
+# Benchmark #Calls #Call.Sites   1        1         2 3 4 5 6 7 8   2 3 4 5 6 7 8      9 10 ...     9 10 ...
 # This table should be generated 2 times: 1 before applying any optimisations, 1 after TP, and one after splitting, which means ...
 # it should be applied on 3 different tables
 # We should ouput a csv containing this table, that will later be read and aggregated with other benchmarks
 # The merging should auto fill missing columns with 0s (not NAs)
 
+table_one_before <- generate_table_one(before_all_optim, benchmark_name)
+table_one_tp <- generate_table_one(after_tp, benchmark_name)
+table_one_splitting <- generate_table_one(after_splitting, benchmark_name)
+#table_one <- table_one %>% select(order(colnames(table_one)))
 
 
 # In addition to this table, it would be nice to have a table listing the different call-sites of a benchmark, as well as their different receivers throughout runtime?
@@ -38,7 +63,7 @@ data <- clean_data_file(data, FALSE)
 
 
 gc()
-
+###### SUMMARY TABLE TWO
 # Table summarizing the amount of call sites being mono, poly, mega
 total_w_splitting <- add_number_receivers(data, c(Call.Site.Target, "Benchmark"))
 total_wo_splitting <- add_number_receivers(data, c(Call.Site, "Benchmark"))
