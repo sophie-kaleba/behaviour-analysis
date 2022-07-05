@@ -18,44 +18,40 @@ if (Sys.getenv("RSTUDIO") == "1") {
 
 source("./scripts/libraries.R", chdir=TRUE)
 
-folder_out <- "./results/07-06-22_16-08-09/results/"
+folder_out <- "./results/07-06-22_16-08-09/results/Status/"
 
-############################################## UTILS ###############################################  
+############################################ LATEX TABLES #########################################
+# Table A
+# Merges the coverage values (LOC, LOC cov, Fn, Fn cov) + Num max of receivers, Num of polymoprhic call-sites, Num of call-sites
 
-compute_evolution <- function(before, after) {
-  if (before == 0) {return(0)}
-  return (round(((after - before) / before) * 100,  digits = 1))
+# Table B
+# For calls
+# will merge values from table_one_original and table_one_tp
+# which is needed:
+# - read from all the tables
+# - merge all the individual tables together
+
+
+# Table C
+# For calls
+# will merge values from table_one_tp and table_one_splitting, also need the table_transition_summary one
+
+# Table D
+# solely table transition summary
+
+load_data_file <- function(filename, row_names) {
+  as.data.frame(t(read.csv(filename, sep="\n", strip.white = TRUE, header=TRUE))
 }
 
-load_data_file <- function(filename) {
-  row_names <- c("Benchmark", "Before", "After", "Variation", "Type")
-  as.data.frame(t(read.csv(filename, sep="\n", strip.white = TRUE, header=FALSE, row.names = row_names)))
-}
 
-# add check.names, otherwise it replaces the special characters by ...
-load_split_file <- function(filename) {
-  read.csv(filename,sep=";", strip.white = TRUE, header=TRUE, fill=TRUE, check.names=FALSE)
-}
-
-load_all_tables <- function (folder, type, call_or_site, is_transitions=FALSE) { 
+load_all_tables <- function (folder, patt) { 
   result <- NULL
-  folder <- file.path(folder_out, type, call_or_site)
-  files <- sort(list.files(folder))
+  files <- sort(list.files(folder, pattern=patt))
   
   for (f in files) {
-    if (is_transitions) {
-      data <- load_split_file(file.path(folder, f))
-      
-      if (empty(data)) {
-        data[1,1] <- str_split(f, "-", simplify = TRUE)[1,1]
-      }
-      result <- dplyr::union_all(data, result)
-      result[is.na(result)] = 0
-    }
-    else {
-      data <- load_data_file(file.path(folder, f))
-      result <- rbind(data, result)
-    }
+      print(f)
+      data <- read.csv(file.path(folder, f), sep=" ", strip.white = TRUE, header=TRUE) %>% select("Benchmark", everything())
+      result <- bind_rows(data, result)
   }
   result$Benchmark <- revalue(result$Benchmark, 
                       c("AsciidoctorConvertSmall"  = "ADConvert",
@@ -67,18 +63,20 @@ load_all_tables <- function (folder, type, call_or_site, is_transitions=FALSE) {
                       "ImageDemoSobel" = "ImgDemoSobel",                 
                       "LeeBench" = "Lee",       
                       "SinatraHello" = "Sinatra"))
-    result$Transition <- revalue(result$Transition, 
-                      c("AsciidoctorConvertSmall"  = "ADConvert",
-                      "AsciidoctorLoadFileSmall" = "ADLoadFile",        
-                      "BlogRailsRoutesTwoRoutesTwoRequests" = "BlogRails",             
-                      "ChunkyDecodePngImagePass" = "ChunkyDec",                      
-                      "FannkuchRedux" = "Fannkuch",                                          
-                      "ImageDemoConv" = "ImgDemoConv",
-                      "ImageDemoSobel" = "ImgDemoSobel",                 
-                      "LeeBench" = "Lee",       
-                      "SinatraHello" = "Sinatra"))
   return(result)
 }
+
+pr <- load_all_tables(folder_out, "before") %>% replace(is.na(.), 0) %>% janitor::adorn_totals()
+
+
+############################################## UTILS ###############################################  
+
+compute_evolution <- function(before, after) {
+  if (before == 0) {return(0)}
+  return (round(((after - before) / before) * 100,  digits = 1))
+}
+
+
 
 rearrange_table <- function(df) {
  spec <- tidyr::build_wider_spec(
