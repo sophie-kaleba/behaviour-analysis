@@ -49,9 +49,8 @@ load_all_tables <- function (folder, patt) {
   files <- sort(list.files(folder, pattern=patt))
   
   for (f in files) {
-      print(f)
       data <- read.csv(file.path(folder, f), sep=" ", strip.white = TRUE, header=TRUE) %>% select("Benchmark", everything())
-      result <- bind_rows(data, result)
+      result <- bind_rows(result, data)
   }
   result$Benchmark <- revalue(result$Benchmark, 
                       c("AsciidoctorConvertSmall"  = "ADConvert",
@@ -66,7 +65,16 @@ load_all_tables <- function (folder, patt) {
   return(result)
 }
 
-pr <- load_all_tables(folder_out, "before") %>% replace(is.na(.), 0) %>% janitor::adorn_totals()
+
+before_optim <- load_all_tables(folder_out, "before") %>% replace(is.na(.), 0) %>% janitor::adorn_totals()
+before_optim <- before_optim[rowSums(before_optim[,-3:-1]) > 0,] # filter out all the monomorphic-only benchmarks
+
+tp <- load_all_tables(folder_out, "tp") %>% replace(is.na(.), 0) %>% janitor::adorn_totals()
+tp <- tp[rowSums(tp[,-3:-1]) > 0,] # filter out all the monomorphic-only benchmarks
+
+splitting <- load_all_tables(folder_out, "split") %>% replace(is.na(.), 0) %>% janitor::adorn_totals()
+splitting <- splitting[rowSums(splitting[,-3:-1]) > 0,] # filter out all the monomorphic-only benchmarks
+
 
 
 ############################################## UTILS ###############################################  
