@@ -18,7 +18,8 @@ if (Sys.getenv("RSTUDIO") == "1") {
 
 source("./scripts/libraries.R", chdir=TRUE)
 
-folder_out <- "./results/07-06-22_16-08-09/results/Status/"
+folder_status <- "./results/07-06-22_16-08-09/results/Status"
+folder_cov <- "./cov_folder/reports/parsed_reports/global"
 
 ############################################ LATEX TABLES #########################################
 # Table A
@@ -30,7 +31,6 @@ folder_out <- "./results/07-06-22_16-08-09/results/Status/"
 # which is needed:
 # - read from all the tables
 # - merge all the individual tables together
-
 
 # Table C
 # For calls
@@ -44,12 +44,13 @@ load_data_file <- function(filename, row_names) {
 }
 
 
-load_all_tables <- function (folder, patt) { 
+load_all_tables <- function (folder, head = TRUE, patt="") { 
   result <- NULL
   files <- sort(list.files(folder, pattern=patt))
   
   for (f in files) {
-      data <- read.csv(file.path(folder, f), sep=" ", strip.white = TRUE, header=TRUE) %>% select("Benchmark", everything())
+      options(warn=-1) # to ignore the incomplete final line warning
+      data <- read.csv(file.path(folder, f), sep=" ", strip.white = TRUE, header=head, check.names = FALSE)
       result <- bind_rows(result, data)
   }
   result$Benchmark <- revalue(result$Benchmark, 
@@ -65,24 +66,47 @@ load_all_tables <- function (folder, patt) {
   return(result)
 }
 
+coverage_data <- load_all_tables(folder_cov,FALSE) 
+colnames(coverage_data) <- c("Benchmark", "LOC", "LOC.Cov", "Num.Fn", "Fn.Cov")
+coverage_data$Benchmark <- revalue(coverage_data$Benchmark, 
+                      c("AsciidoctorConvertSmall"  = "ADConvert",
+                      "AsciidoctorLoadFileSmall" = "ADLoadFile",        
+                      "BlogRailsRoutesTwoRoutesTwoRequests" = "BlogRails",             
+                      "ChunkyDecodePngImagePass" = "ChunkyDec",                      
+                      "FannkuchRedux" = "Fannkuch",                                          
+                      "ImageDemoConv" = "ImgDemoConv",
+                      "ImageDemoSobel" = "ImgDemoSobel",                 
+                      "LeeBench" = "Lee",       
+                      "SinatraHello" = "Sinatra"))
 
-before_optim <- load_all_tables(folder_out, "before") %>% replace(is.na(.), 0) %>% janitor::adorn_totals()
-before_optim <- before_optim[rowSums(before_optim[,-3:-1]) > 0,] # filter out all the monomorphic-only benchmarks
+before_optim <- load_all_tables(folder_status, patt="before") %>% replace(is.na(.), 0)
+#before_optim <- before_optim[rowSums(before_optim[,-3:-1]) > 0,] # filter out all the monomorphic-only benchmarks
+before_optim <- before_optim[,gtools::mixedsort(names(before_optim))] %>% select("Benchmark", everything()) 
+before_optim <- join(coverage_data, before_optim)
 
-tp <- load_all_tables(folder_out, "tp") %>% replace(is.na(.), 0) %>% janitor::adorn_totals()
+tp <- load_all_tables(folder_status, "tp") %>% replace(is.na(.), 0)
 tp <- tp[rowSums(tp[,-3:-1]) > 0,] # filter out all the monomorphic-only benchmarks
+tp <- tp[,gtools::mixedsort(names(tp))] %>% select("Benchmark", everything()) 
 
-splitting <- load_all_tables(folder_out, "split") %>% replace(is.na(.), 0) %>% janitor::adorn_totals()
+splitting <- load_all_tables(folder_status, "split") %>% replace(is.na(.), 0)
 splitting <- splitting[rowSums(splitting[,-3:-1]) > 0,] # filter out all the monomorphic-only benchmarks
+splitting <- splitting[,gtools::mixedsort(names(splitting))] %>% select("Benchmark", everything()) 
+
+# From there, build Table 1
+# LOC, LOC covered, Fn, Fn covered, Max receivers, number of poly calls, number of poly call-sites
 
 
 
 ############################################## UTILS ###############################################  
-
-compute_evolution <- function(before, after) {
-  if (before == 0) {return(0)}
-  return (round(((after - before) / before) * 100,  digits = 1))
+f0 = function(df) {
+    idx = ifelse((df == 0), 0L, col(df))
+    apply(idx, 1, max)
 }
+
+before_optim <- before_optim %>% 
+    mutate(Max.Receiver = c(0, names(.))[f0(.) + 1])
+
+before_optim$Max.Receiver <- sub("[^0-9]+", "", before_optim$Max.Receiver)
 
 
 
