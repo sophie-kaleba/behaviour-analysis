@@ -85,11 +85,11 @@ before_optim <- before_optim[,gtools::mixedsort(names(before_optim))] %>% select
 before_optim <- join(coverage_data, before_optim)
 
 tp <- load_all_tables(folder_status, patt="tp") %>% replace(is.na(.), 0)
-tp <- tp[rowSums(tp[,-3:-1]) > 0,] # filter out all the monomorphic-only benchmarks
+#tp <- tp[rowSums(tp[,-3:-1]) > 0,] # filter out all the monomorphic-only benchmarks
 tp <- tp[,gtools::mixedsort(names(tp))] %>% select("Benchmark", everything()) 
 
 splitting <- load_all_tables(folder_status, patt="split") %>% replace(is.na(.), 0)
-splitting <- splitting[rowSums(splitting[,-3:-1]) > 0,] # filter out all the monomorphic-only benchmarks
+#splitting <- splitting[rowSums(splitting[,-3:-1]) > 0,] # filter out all the monomorphic-only benchmarks
 splitting <- splitting[,gtools::mixedsort(names(splitting))] %>% select("Benchmark", everything()) 
 
 # From there, build Table 1
@@ -99,31 +99,35 @@ f0 = function(df) {
     apply(idx, 1, max)
 }
 
-before_optim <- before_optim %>% mutate(Max.Receiver = c(0, names(.))[f0(.) + 1])
-before_optim$Max.Receiver <- sub("[^0-9]+", "", before_optim$Max.Receiver)
+sum_poly <- function(df) {
+  df <- df %>% mutate(Max.Receiver = c(0, names(.))[f0(.) + 1])
+  df$Max.Receiver <- sub("[^0-9]+", "", df$Max.Receiver)
 
-before_optim$Poly.Calls <- rowSums(before_optim[grep('^[2-8]_\\w+.\\w+s', names(before_optim))])
-before_optim$Poly.Calls.Sites <- rowSums(before_optim[grep('^[2-8]_\\w+.\\w+.S', names(before_optim))])
+  df$Poly.Calls <- rowSums(df[grep('^[2-8]_\\w+.\\w+s', names(df))])
+  df$Poly.Call.Sites <- rowSums(df[grep('^[2-8]_\\w+.\\w+.S', names(df))])
 
-before_optim$Mega.Calls <- rowSums(before_optim[grep('^([9]|[1-9][0-9])_\\w+.\\w+s', names(before_optim))])
-before_optim$Mega.Calls.Sites <- rowSums(before_optim[grep('^([9]|[1-9][0-9])_\\w+.\\w+.S', names(before_optim))])
+  df$Mega.Calls <- rowSums(df[grep('^([9]|[1-9][0-9])_\\w+.\\w+s', names(df))])
+  df$Mega.Call.Sites <- rowSums(df[grep('^([9]|[1-9][0-9])_\\w+.\\w+.S', names(df))])
+  
+  return(df)
+}
 
+before_optim <- sum_poly(before_optim)
+tp <- sum_poly(tp)
+splitting <- sum_poly(splitting)
+
+table_one <- before_optim %>%
+  select(Benchmark, LOC, LOC.Cov, Num.Fn, Fn.Cov, Max.Receiver, Poly.Call.Sites, Poly.Calls, Mega.Call.Sites, Mega.Calls) %>%
+  mutate(Poly.Call.Sites = Poly.Call.Sites + Mega.Call.Sites, Poly.Calls = Mega.Calls + Poly.Calls, across(!Benchmark, as.numeric)) %>%
+  select (-Mega.Call.Sites, -Mega.Calls)
+
+# For table 2, we need to have 2 temporary tables, one before optim, one after tp
+table_two_global_aux <- before_optim %>%
+  select(Benchmark, `1_Num.Call.Sites`, `1_Num.Calls`, Poly.Calls, Poly.Call.Sites, Mega.Calls, Mega.Call.Sites) %>%
+  mutate(Poly.Call.Sites = Poly.Call.Sites + Mega.Call.Sites, Poly.Calls = Mega.Calls + Poly.Calls, across(!Benchmark, as.numeric)) %>%
+  select (-Mega.Call.Sites, -Mega.Calls)
 
 ############################################## UTILS ###############################################  
-
-
-rearrange_table <- function(df) {
- spec <- tidyr::build_wider_spec(
-  df, 
-  names_from = Type, 
-  values_from = c(Before, After, Variation), 
-  names_glue = "{Type}_{.value}")
-  
-  spec <- spec %>% 
-    arrange(factor(.name, levels = c("MONO_Before", "MONO_After", "MONO_Variation", "POLY_Before", "POLY_After", "POLY_Variation", "MEGA_Before", "MEGA_After", "MEGA_Variation") ))
-  
-  return(tidyr::pivot_wider_spec(df, spec))
-}
 
 # Here we'll collapse together: all the PSDUtil, PSDImage, PSDCompose and ChunkyColor
 combine_similar_benchmarks <- function(df, benchmark_prefix) {
@@ -148,18 +152,6 @@ combine_similar_benchmarks <- function(df, benchmark_prefix) {
   return(df)
 }
 
-build_nice_latex_table <- function(df, label_text = NULL) {
-# trash the data BUT looks exactly how it should for the paper
-# see https://stackoverflow.com/questions/13984470/possible-to-create-latex-multicolumns-in-xtable/28420723#28420723
-names(df)[2] = names(df)[5] = names(df)[8] = "Before"
-names(df)[3] = names(df)[6] = names(df)[9] = "After"
-names(df)[4] = names(df)[7] = names(df)[10] = "Change \n (in %)"
-beauty <- kableExtra::kable(df, booktabs = TRUE, linesep = "", label = label_text) %>%
-  kableExtra::row_spec(nrow(df), bold = TRUE, background = "#AFAFAF") %>%
-  kableExtra::add_header_above(c("", "MONO"=3, "POLY"=3, "MEGA"=3)) %>%
-  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
-return(beauty)
-}
 
 build_nice_latex_table_no_mega <- function(df, label_text = NULL, caption_text = "", header_std = c("", "MONO"=2, "POLY"=2)) {
 # trash the data BUT looks exactly how it should for the paper
@@ -172,30 +164,6 @@ beauty <- kableExtra::kable(df, booktabs = TRUE, linesep = "", label = label_tex
   kableExtra::add_header_above(header_std) %>%
   kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
 return(beauty)
-}
-
-add_total_row <- function(df) {
-  df <- df %>% dplyr::mutate(across(!Benchmark, as.numeric))
-  df <- purrr::map_df(df, prettyNum ,big.interval = 3,  big.mark = ",")
-  mono_before <- sum(df$MONO_Before)
-  mono_after <- sum(df$MONO_After)
-  poly_before <- sum(df$POLY_Before)
-  poly_after <- sum(df$POLY_After)
-  mega_before <- sum(df$MEGA_Before)
-  mega_after <- sum(df$MEGA_After)
-  vec <- list("TOTAL", mono_before, mono_after, compute_evolution(mono_before, mono_after), poly_before, poly_after, compute_evolution(poly_before, poly_after), mega_before, mega_after, compute_evolution(mega_before, mega_after))
-  df[nrow(df) + 1,] <- vec
-  return(df)
-}
-
-add_total_row_split <- function(df) {
-  df <- df %>% dplyr::mutate(across(!Benchmark, as.numeric))
-  mono_mono <- sum(df$`MONO->MONO (=)`)
-  mono_mono_diff <- sum(df$`MONO->MONO (!=)`)
-  poly_mono <- sum(df$`POLY->MONO`)
-  vec <- list("TOTAL", mono_mono, mono_mono_diff, poly_mono)
-  df[nrow(df) + 1,] <- vec
-  return(df)
 }
 
 switch_last_two <- function(df) {
@@ -213,54 +181,13 @@ apply_big_numbers <- function(df) {
    return(df)
 }
 
-remove_after_column <- function(df) {
-  df <- df %>%
-    select(-contains("After"))
-  return(df)
-}
 
-divide_the_tables <- function(df) {
-  df_mono <- df %>%
-    filter(POLY_Before == 0)
-  
-  df_poly <- df %>%
-  filter(POLY_Before != 0)
-  
-  return (list(df_mono, df_poly))
-}
-
-merge_the_mono <- function(df1, df2) {
-  calls <- df1 %>% 
-    select(Benchmark, MONO_Before) %>%
-    rename("Num.Calls" = "MONO_Before")
-  
-  call_sites <- df2 %>% 
-    select(Benchmark, MONO_Before) %>%
-    rename("Num.Call.Sites" = "MONO_Before")
-  
-  result <- join(calls, call_sites)
-  return(result)
-}
 
 ############################################## MERGED TABLES ############################################### 
-
-data_tp_calls <- load_all_tables(folder_out, "TP", "Calls")
-data_tp_call_sites <- load_all_tables(folder_out, "TP", "Call-Sites")
-
-data_split_calls <- load_all_tables(folder_out, "Split", "Calls")
-data_split_call_sites <- load_all_tables(folder_out, "Split", "Call-Sites")
 
 data_split_transitions <- load_all_tables(folder_out, "Split", "Transitions", TRUE)
 data_split_transitions <- data_split_transitions %>% dplyr::arrange(Transition) %>% rename(Benchmark = Transition)  %>% select(-contains("..."))
 data_split_transitions_sum <- data_split_transitions %>% mutate(Times.Split = rowSums(across(where(is.numeric))))
-
-# and rearranged
-table_data_tp_calls <- rearrange_table(data_tp_calls) %>% dplyr::arrange(Benchmark)
-table_data_tp_call_sites <- rearrange_table(data_tp_call_sites) %>% dplyr::arrange(Benchmark) 
-
-table_data_split_calls <- rearrange_table(data_split_calls) %>% dplyr::arrange(Benchmark)
-table_data_split_calls <- cbind(table_data_split_calls, Times.Split = data_split_transitions_sum$Times.Split)
-table_data_split_call_sites <- rearrange_table(data_split_call_sites) %>% dplyr::arrange(Benchmark) 
 
 # Need to merge together the benchmarks with the same behavior
 #table_data_tp_calls <- add_total_row(table_data_tp_calls)
@@ -306,16 +233,6 @@ data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "Ch
 data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "ChunkyColor")  %>% dplyr::arrange(Benchmark) %>% remove_after_column() %>% apply_big_numbers()
 #data_split_transitions <- switch_last_two(data_split_transitions)
 
-
-# distinguish polymoprhic benchmarks from monomoprhic benchmarks
-tp_calls <- divide_the_tables(table_data_tp_calls)
-tp_call_sites <- divide_the_tables(table_data_tp_call_sites)
-
-split_calls <- divide_the_tables(table_data_split_calls)
-split_call_sites <- divide_the_tables(table_data_split_call_sites)
-
-tp_mono <- merge_the_mono(tp_calls[[1]], tp_call_sites[[1]])
-split_mono <- merge_the_mono(split_calls[[1]], split_call_sites[[1]])
 
 # and all latexed
 latex_tp_calls_poly <- build_nice_latex_table_no_mega(tp_calls[[2]] %>% select(-contains("MEGA")), label_text = "tp_calls_poly", "Eliminating target duplicates in the cache is very effective at reducing polymorphism: the amount of polymorphic calls is reduced by at least 24.6 \\%.")
