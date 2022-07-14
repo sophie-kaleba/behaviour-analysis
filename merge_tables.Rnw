@@ -122,11 +122,47 @@ table_one <- before_optim %>%
   select (-Mega.Call.Sites, -Mega.Calls)
 
 # For table 2, we need to have 2 temporary tables, one before optim, one after tp
-table_two_global_aux <- before_optim %>%
-  select(Benchmark, `1_Num.Call.Sites`, `1_Num.Calls`, Poly.Calls, Poly.Call.Sites, Mega.Calls, Mega.Call.Sites) %>%
+table_before_aux <- before_optim %>%
+  select(Benchmark, `1_Num.Call.Sites`, `1_Num.Calls`, Poly.Calls, Poly.Call.Sites, Mega.Calls, Mega.Call.Sites, Max.Receiver) %>%
   mutate(Poly.Call.Sites = Poly.Call.Sites + Mega.Call.Sites, Poly.Calls = Mega.Calls + Poly.Calls, across(!Benchmark, as.numeric)) %>%
   select (-Mega.Call.Sites, -Mega.Calls)
 
+table_tp_aux <- tp %>%
+  select(Benchmark, `1_Num.Call.Sites`, `1_Num.Calls`, Poly.Calls, Poly.Call.Sites, Mega.Calls, Mega.Call.Sites, Max.Receiver) %>%
+  mutate(Poly.Call.Sites = Poly.Call.Sites + Mega.Call.Sites, Poly.Calls = Mega.Calls + Poly.Calls, across(!Benchmark, as.numeric)) %>%
+  select (-Mega.Call.Sites, -Mega.Calls) %>%
+  rename_with( ~ paste0("TP_", .x), .cols = -Benchmark)
+
+table_split_aux <- splitting %>%
+  select(Benchmark, `1_Num.Call.Sites`, `1_Num.Calls`, Poly.Calls, Poly.Call.Sites, Mega.Calls, Mega.Call.Sites, Max.Receiver) %>%
+  mutate(Poly.Call.Sites = Poly.Call.Sites + Mega.Call.Sites, Poly.Calls = Mega.Calls + Poly.Calls, across(!Benchmark, as.numeric)) %>%
+  select (-Mega.Call.Sites, -Mega.Calls) %>%
+  rename_with( ~ paste0("SPLIT_", .x), .cols = -Benchmark)  
+
+# from this table, we can extract Table2, for both calls and call-sites
+table_two_global <- table_before_aux %>%
+  merge(table_tp_aux) %>%
+  filter(Poly.Call.Sites > 0) %>%
+  mutate(Change.Mono.Sites = round((100 * (TP_1_Num.Call.Sites - `1_Num.Call.Sites`)/`1_Num.Call.Sites`), 1), 
+         Change.Mono.Calls = round((100 * (TP_1_Num.Calls - `1_Num.Calls`)/`1_Num.Calls`),1),
+         Change.Poly.Sites = round((100 * (TP_Poly.Call.Sites - Poly.Call.Sites)/Poly.Call.Sites), 1), 
+         Change.Poly.Calls = round((100 * (TP_Poly.Calls - Poly.Calls)/Poly.Calls), 1)) 
+
+# from this table, we can extract Table3, for both calls and call-sites. Beware, we still need the amount of time they have been split
+table_three_global <- table_tp_aux %>%
+  merge(table_split_aux) %>%
+  filter(TP_Poly.Call.Sites > 0) %>%
+  mutate(Change.Mono.Sites = round((100 * (SPLIT_1_Num.Call.Sites - `TP_1_Num.Call.Sites`)/`TP_1_Num.Call.Sites`), 1), 
+         Change.Mono.Calls = round((100 * (SPLIT_1_Num.Calls - `TP_1_Num.Calls`)/`TP_1_Num.Calls`),1),
+         Change.Poly.Sites = round((100 * (SPLIT_Poly.Call.Sites - TP_Poly.Call.Sites)/TP_Poly.Call.Sites), 1), 
+         Change.Poly.Calls = round((100 * (SPLIT_Poly.Calls - TP_Poly.Calls)/TP_Poly.Calls), 1)) 
+
+# This tabke displays to which extent the optimizations impacted polymoprhism, this is new from the article
+table_four_extent <- table_before_aux %>%
+  merge(table_tp_aux) %>%
+  merge(table_split_aux) %>%
+  select(Benchmark, Max.Receiver, TP_Max.Receiver, SPLIT_Max.Receiver) %>%
+  filter(Max.Receiver > 1)
 ############################################## UTILS ###############################################  
 
 # Here we'll collapse together: all the PSDUtil, PSDImage, PSDCompose and ChunkyColor
