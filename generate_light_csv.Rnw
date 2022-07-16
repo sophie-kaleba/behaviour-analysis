@@ -5,16 +5,39 @@ benchmark_name = args[1]
 folder_out = file.path(getwd(),args[2],"results")
 filename = args[3]
 
-writeLines(paste("[INFO] Generate the csv for",benchmark_name,"located at",filename,". Generate the csv at",folder_out))
+writeLines(paste("[INFO] Reading trace of ",benchmark_name,"located at",filename,". Generate the csv at",folder_out))
 
-folder_out <- "/home/sopi/Documents/Side_projects/behaviour-analysis/results/07-06-22_16-08-09/results"
-benchmark_name <- "BlogRailsRoutesTwoRoutesTwoRequests"
+#folder_out <- "/home/sopi/Documents/Side_projects/behaviour-analysis/results/07-06-22_16-08-09/results"
+#benchmark_name <- "BlogRailsRoutesTwoRoutesTwoRequests"
 filename <- "./results/07-06-22_16-08-09/BlogRailsRoutesTwoRoutesTwoRequests_Jun07-2022_20:50:52/parsed_BlogRailsRoutesTwoRoutesTwoRequests.mylog"
-data <- load_data_file(filename)
-data <- clean_data_file(data, FALSE) # remove any invalid data (extra logging info ignored by parsing)
 
+col_names <- c("Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver")
+data <- fread(filename, header = FALSE, sep="\t", col.names = col_names)
+benchmark_name <- str_match(filename, "parsed\\_(.*?)\\.mylog")[2]
+data$Benchmark <- benchmark_name
+
+data <- data[!(`Builtin?` %like% "PROC|LAMBDA|block")]
+data <- na.omit(data)
+data[, Call.ID := 1:.N]
+data <- data[, lapply(.SD, str_trim)]
+
+data[, Num.Receiver.Observed := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, Benchmark)]
+data[, Num.Receiver.Original := n_distinct(Original.Receiver), by=list(Source.Section, Symbol, Benchmark)]
+
+before_all_optim <- copy(data)
+before_all_optim[, Num.Receiver.Observed := NULL]
+setnames(before_all_optim, "Num.Receiver.Original", "Num.Receiver")
+
+after_tp <- copy(data)
+after_tp[, Num.Receiver.Original := NULL]
+setnames(after_tp, "Num.Receiver.Observed", "Num.Receiver")
+
+after_splitting <- copy(data)
+after_splitting[, Num.Receiver.Observed := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, CT.Address, Benchmark)]
+setnames(after_splitting, "Num.Receiver.Observed", "Num.Receiver")
+
+gc()
 ############################################## MAIN TABLES ############################################## 
-receivers_overview <- add_number_receivers(data, c(Call.Site, "Benchmark")) 
 
 # These 3 tables should be feed as input to build table one and table two
 before_all_optim <- receivers_overview %>% select(-Num.Receiver.Observed) %>% rename(Num.Receiver = Num.Receiver.Original) #focus on Num.Receiver.Original
