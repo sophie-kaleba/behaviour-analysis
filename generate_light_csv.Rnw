@@ -1,11 +1,11 @@
 source("./scripts/libraries.R", chdir=TRUE)
 
-args = commandArgs(trailingOnly=TRUE)
-benchmark_name = args[1]
-folder_out = file.path(getwd(),args[2],"results")
-filename = args[3]
-
-writeLines(paste("[INFO] Reading trace of ",benchmark_name,"located at",filename,". Generate the csv at",folder_out))
+# args = commandArgs(trailingOnly=TRUE)
+# benchmark_name = args[1]
+# folder_out = file.path(getwd(),args[2],"results")
+# filename = args[3]
+# 
+# writeLines(paste("[INFO] Reading trace of ",benchmark_name,"located at",filename,". Generate the csv at",folder_out))
 
 #folder_out <- "/home/sopi/Documents/Side_projects/behaviour-analysis/results/07-06-22_16-08-09/results"
 #benchmark_name <- "BlogRailsRoutesTwoRoutesTwoRequests"
@@ -21,9 +21,13 @@ data <- na.omit(data)
 data[, Call.ID := 1:.N]
 data <- data[, lapply(.SD, str_trim)]
 
-data[, Num.Receiver.Observed := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, Benchmark)]
-data[, Num.Receiver.Original := n_distinct(Original.Receiver), by=list(Source.Section, Symbol, Benchmark)]
+data[ , 
+      `:=`(Num.Receiver.Observed = n_distinct(Observed.Receiver), 
+       Num.Receiver.Original = n_distinct(Original.Receiver)), by=list(Source.Section, Symbol, Benchmark)]
 
+# These 3 tables should be feed as input to build table one and table two
+# WIP - we might not need to have 3 different tables (heavy on memory), we could keep one table, and have 
+# 3 different columns: Num.Target.Original, Num.Target.Observed, Num.Target.Observed.W.Splitting
 before_all_optim <- copy(data)
 before_all_optim[, Num.Receiver.Observed := NULL]
 setnames(before_all_optim, "Num.Receiver.Original", "Num.Receiver")
@@ -36,13 +40,34 @@ after_splitting <- copy(data)
 after_splitting[, Num.Receiver.Observed := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, CT.Address, Benchmark)]
 setnames(after_splitting, "Num.Receiver.Observed", "Num.Receiver")
 
-gc()
 ############################################## MAIN TABLES ############################################## 
+generate_table_one <- function(df, benchmark_name) {
+  table_one <- mutate_per_state(df, "Num.Receiver") 
+  table_one <- tidyr::pivot_wider(table_one, 
+                                  names_glue = "{Num.Receiver}_{.value}",
+                                  names_from = Num.Receiver, 
+                                  values_from = c(Num.Calls, Num.Call.Sites)
+  ) 
+  table_one$Benchmark = benchmark_name
+  return(table_one)
+}
 
-# These 3 tables should be feed as input to build table one and table two
-before_all_optim <- receivers_overview %>% select(-Num.Receiver.Observed) %>% rename(Num.Receiver = Num.Receiver.Original) #focus on Num.Receiver.Original
-after_tp <- receivers_overview %>% select(-Num.Receiver.Original) %>% rename(Num.Receiver = Num.Receiver.Observed) #focus on Num.Receiver.Observed
-after_splitting <- add_number_receivers(data, c(Call.Site.Target, "Benchmark")) %>% select(-Num.Receiver.Original) %>% rename(Num.Receiver = Num.Receiver.Observed) #after tp has been addressed
+# to recreate the generate_table_one method
+# first do the mutate_per_state
+# WIP - likely the "Num.Receiver" part will change if I only keep one table instead of splitting into several
+test <- before_all_optim[ , .(Num.Calls = n_distinct(Call.ID), 
+                                 Num.Call.Sites = n_distinct(Source.Section, Symbol),
+                              Benchmark),
+                          by = "Num.Receiver"][, dcast(.SD, 
+                                                       Benchmark ~ Num.Receiver,
+                                                       value.var = c("Num.Calls", "Num.Call.Sites"))]
+# then pivot
+test <- dcast(test,
+      Benchmark ~ Num.Receiver,
+      value.var = c("Num.Calls", "Num.Call.Sites"))
+
+test_before <- mutate_per_state(before_all_optim, "Num.Receiver")
+
 
 mutate_per_state <- function(df, type_of_receiver) {
   result <- df %>%
@@ -50,6 +75,8 @@ mutate_per_state <- function(df, type_of_receiver) {
     dplyr::summarise(Num.Calls = n_distinct(Call.ID), Num.Call.Sites = n_distinct(Source.Section, Symbol))
   return (result)
 }
+
+# These 3 tables should be feed as input to build table one and table two
 
 ###### SUMMARY TABLE ONE
 # Build a summary table, structure as follows:
