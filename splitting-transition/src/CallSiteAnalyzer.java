@@ -87,7 +87,7 @@ public class CallSiteAnalyzer {
         int targetAddress = Integer.parseInt(row[3]);
         String receiver = row[4];
         String benchmark = row[5];
-        int numCalls = Integer.parseInt(row[9]);
+        int numCalls = Integer.parseInt(row[6]);
         Benchmark currentBenchmark = new Benchmark(benchmark);
         CallSite currentSite = new CallSite(sourceSection, symbol);
         CallTarget currentTarget = new CallTarget(targetAddress, numCalls);

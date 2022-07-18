@@ -17,9 +17,7 @@ benchmark_name <- str_match(filename, "parsed\\_(.*?)\\.mylog")[2]
 data$Benchmark <- benchmark_name
 
 data <- data[!(`Builtin?` %like% "PROC|LAMBDA|block")]
-data <- na.omit(data)
-data[, Call.ID := 1:.N]
-data <- data[, lapply(.SD, str_trim)]
+data <- data[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim)]
 
 data[ , 
       `:=`(Num.Receiver.Observed = n_distinct(Observed.Receiver), 
@@ -28,56 +26,48 @@ data[ ,
 # These 3 tables should be feed as input to build table one and table two
 # WIP - we might not need to have 3 different tables (heavy on memory), we could keep one table, and have 
 # 3 different columns: Num.Target.Original, Num.Target.Observed, Num.Target.Observed.W.Splitting
-before_all_optim <- copy(data)
-before_all_optim[, Num.Receiver.Observed := NULL]
-setnames(before_all_optim, "Num.Receiver.Original", "Num.Receiver")
+# before_all_optim <- copy(data)
+# before_all_optim[, Num.Receiver.Observed := NULL]
+# setnames(before_all_optim, "Num.Receiver.Original", "Num.Receiver")
+# 
+# after_tp <- copy(data)
+# after_tp[, Num.Receiver.Original := NULL]
+# setnames(after_tp, "Num.Receiver.Observed", "Num.Receiver")
+# 
+# after_splitting <- copy(data)
+# after_splitting[, Num.Receiver.Observed := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, CT.Address, Benchmark)]
+# setnames(after_splitting, "Num.Receiver.Observed", "Num.Receiver")
 
-after_tp <- copy(data)
-after_tp[, Num.Receiver.Original := NULL]
-setnames(after_tp, "Num.Receiver.Observed", "Num.Receiver")
+setnames(data,"Num.Receiver.Original", "Before.Num.Targets")
+setnames(data,"Num.Receiver.Observed", "TP.Num.Targets")
+data[ , "Split.Num.Targets" := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, CT.Address, Benchmark)]
+data[ , "Times.Splitted" := (n_distinct(CT.Address) - 1), by=list(Source.Section, Symbol)]
 
-after_splitting <- copy(data)
-after_splitting[, Num.Receiver.Observed := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, CT.Address, Benchmark)]
-setnames(after_splitting, "Num.Receiver.Observed", "Num.Receiver")
+############################################## SPLITTING ############################################## 
+
+split_table <- copy(data)
+split_table[ , "Num.Calls.Target" := n_distinct(Call.ID), by=list(Source.Section, Symbol, Benchmark)]
+split_table <- split_table[, .(Call.ID, Symbol, Source.Section, CT.Address, Observed.Receiver, Benchmark, Num.Calls.Target)]
+
+# and export it as a csv file so our java program can analyse it
+split_file <-  paste(getwd(),"/",benchmark_name,"_splitting_data.csv", sep="")
+out_split_file <- paste(getwd(),"/","out_",benchmark_name,"_splitting_data.csv", sep="")
+fwrite(split_table, split_file, row.names = FALSE)
+
+# call the java program to analyze the data, and then fetch back the results
+prev_wd <- getwd()
+target_dir <- file.path(getwd(), "splitting-transition","out","production","splitting-transition")
+setwd(target_dir)
+system2("java", paste(" CallSiteAnalyzer",split_file, out_split_file, sep=" "))
+
+setwd(prev_wd)
+row_names <- c("Source.Section", "Symbol", "Start.ID", "End.ID", "Start.State", "End.State", "Start.Cache.Size", "End.Cache.Size", "Union.Size", "Intersect.Size", "Benchmark", "Num.Calls.Target")
+transition_data <- read.csv(out_split_file, header = FALSE, sep = ",", row.names=NULL, col.names=row_names) 
+
+splitting_transition_summary_sites <- summarise_transition_sites(transition_data)
+splitting_transition_summary_sites <- as.data.frame(t(splitting_transition_summary_sites))
 
 ############################################## MAIN TABLES ############################################## 
-generate_table_one <- function(df, benchmark_name) {
-  table_one <- mutate_per_state(df, "Num.Receiver") 
-  table_one <- tidyr::pivot_wider(table_one, 
-                                  names_glue = "{Num.Receiver}_{.value}",
-                                  names_from = Num.Receiver, 
-                                  values_from = c(Num.Calls, Num.Call.Sites)
-  ) 
-  table_one$Benchmark = benchmark_name
-  return(table_one)
-}
-
-# to recreate the generate_table_one method
-# first do the mutate_per_state
-# WIP - likely the "Num.Receiver" part will change if I only keep one table instead of splitting into several
-test <- before_all_optim[ , .(Num.Calls = n_distinct(Call.ID), 
-                                 Num.Call.Sites = n_distinct(Source.Section, Symbol),
-                              Benchmark),
-                          by = "Num.Receiver"][, dcast(.SD, 
-                                                       Benchmark ~ Num.Receiver,
-                                                       value.var = c("Num.Calls", "Num.Call.Sites"))]
-# then pivot
-test <- dcast(test,
-      Benchmark ~ Num.Receiver,
-      value.var = c("Num.Calls", "Num.Call.Sites"))
-
-test_before <- mutate_per_state(before_all_optim, "Num.Receiver")
-
-
-mutate_per_state <- function(df, type_of_receiver) {
-  result <- df %>%
-    group_by_at(type_of_receiver) %>%
-    dplyr::summarise(Num.Calls = n_distinct(Call.ID), Num.Call.Sites = n_distinct(Source.Section, Symbol))
-  return (result)
-}
-
-# These 3 tables should be feed as input to build table one and table two
-
 ###### SUMMARY TABLE ONE
 # Build a summary table, structure as follows:
 # vvvvvvvvvvvvvvvvvvvvvvvvvvvv     MONOMOPRHIC                POLYMOPRHIC                 MEGAMOPRHIC
@@ -88,21 +78,31 @@ mutate_per_state <- function(df, type_of_receiver) {
 # We should ouput a csv containing this table, that will later be read and aggregated with other benchmarks
 # The merging should auto fill missing columns with 0s (not NAs)
 
-generate_table_one <- function(df, benchmark_name) {
-  table_one <- mutate_per_state(df, "Num.Receiver") 
-  table_one <- tidyr::pivot_wider(table_one, 
-                                  names_glue = "{Num.Receiver}_{.value}",
-                                  names_from = Num.Receiver, 
-                                  values_from = c(Num.Calls, Num.Call.Sites)
-  ) 
-  table_one$Benchmark = benchmark_name
-  return(table_one)
-}
 
-table_one_before <- generate_table_one(before_all_optim, benchmark_name)
-table_one_tp <- generate_table_one(after_tp, benchmark_name)
-table_one_splitting <- generate_table_one(after_splitting, benchmark_name)
-#table_one <- table_one %>% select(order(colnames(table_one)))
+table_one <- data[ , .(Before.Num.Calls = n_distinct(Call.ID), 
+                       Before.Num.Call.Sites = n_distinct(Source.Section, Symbol),
+                       Benchmark),
+                   by = "Before.Num.Targets"][, dcast(.SD, 
+                                                      Benchmark ~ Before.Num.Targets,
+                                                      value.var = c("Before.Num.Calls", "Before.Num.Call.Sites"))]
+
+table_one <- table_one[data[ , .(TP.Num.Calls = n_distinct(Call.ID), 
+                                 TP.Num.Call.Sites = n_distinct(Source.Section, Symbol),
+                                 Benchmark),
+                             by = "TP.Num.Targets"][, dcast(.SD, 
+                                                            Benchmark ~ TP.Num.Targets,
+                                                            value.var = c("TP.Num.Calls", "TP.Num.Call.Sites"))]]
+
+table_one <-  table_one[data[ , .(Split.Num.Calls = n_distinct(Call.ID), 
+                                  Split.Num.Call.Sites = n_distinct(Source.Section, Symbol), #This is weird - is this correct?
+                                  Benchmark),
+                              by = "Split.Num.Targets"][, dcast(.SD, 
+                                                                Benchmark ~ Split.Num.Targets,
+                                                                value.var = c("Split.Num.Calls", "Split.Num.Call.Sites"))]]
+
+table_one <-  table_one[data[ , Times.Splitted := 
+                              by = "Split.Num.Targets"]]
+
 
 ###### SUMMARY TABLE TWO
 # Table summarizing the amount of call sites being mono, poly, mega

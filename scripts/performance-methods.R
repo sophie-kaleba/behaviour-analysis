@@ -14,9 +14,7 @@ dt_clean_data_file <- function(df_p, keep_blocks) {
        df_p <- data[!(`Builtin?` %like% "PROC|LAMBDA|block")] 
   }
 
-  df_p <- na.omit(df_p) #remove rows containing NA
-  df_p[, Call.ID := 1:.N] #add a row number
-  df_p <- df_p[, lapply(.SD, str_trim)] # trim all whitespaces
+  df_p <- df_p[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim)]
 
   return (df_p)
 }
@@ -36,4 +34,26 @@ dt_generate_table_one <- function(dt) {
                                                        Benchmark ~ Num.Receiver,
                                                        value.var = c("Num.Calls", "Num.Call.Sites"))]
   return(dt_p)
+}
+
+dt_analyse_splitting_transitions <- function(dt, benchmark_name) {
+  split_table <- copy(data)
+  split_table[ , "Num.Calls.Target" := n_distinct(Call.ID), by=list(Source.Section, Symbol, Benchmark)]
+  split_table <- split_table[, .(Call.ID, Symbol, Source.Section, CT.Address, Observed.Receiver, Benchmark, Num.Calls.Target)]
+
+  # and export it as a csv file so our java program can analyse it
+  split_file <-  paste(getwd(),"/",benchmark_name,"_splitting_data.csv", sep="")
+  out_split_file <- paste(getwd(),"/","out_",benchmark_name,"_splitting_data.csv", sep="")
+  fwrite(split_table, split_file, row.names = FALSE)
+
+  # call the java program to analyze the data, and then fetch back the results
+  prev_wd <- getwd()
+  target_dir <- file.path(getwd(), "splitting-transition","out","production","splitting-transition")
+  setwd(target_dir)
+  system2("java", paste(" CallSiteAnalyzer",split_file, out_split_file, sep=" "))
+
+  setwd(prev_wd)
+  row_names <- c("Source.Section", "Symbol", "Start.ID", "End.ID", "Start.State", "End.State", "Start.Cache.Size", "End.Cache.Size", "Union.Size", "Intersect.Size", "Benchmark", "Num.Calls.Target")
+  transition_data <- read.csv(out_split_file, header = FALSE, sep = ",", row.names=NULL, col.names=row_names)
+  return(transition_data)
 }

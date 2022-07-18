@@ -14,6 +14,7 @@ load_and_install_if_necessary("ggplot2")
 load_and_install_if_necessary("psych")   # uses only geometric.mean
 load_and_install_if_necessary("tables")
 load_and_install_if_necessary("reshape2")
+load_and_install_if_necessary("gtools")
 #load_and_install_if_necessary("assertthat")
 load_and_install_if_necessary("tikzDevice")
 load_and_install_if_necessary("scales")
@@ -21,7 +22,6 @@ load_and_install_if_necessary("memoise")
 load_and_install_if_necessary("RColorBrewer")
 load_and_install_if_necessary("ggrepel")   # make sure labels don't overlap
 load_and_install_if_necessary("forcats")
-load_and_install_if_necessary("data.table")
 load_and_install_if_necessary("stringr")
 load_and_install_if_necessary("xtable")
 load_and_install_if_necessary("htmlTable")
@@ -30,6 +30,12 @@ load_and_install_if_necessary("assertr")
 load_and_install_if_necessary("R.utils")
 load_and_install_if_necessary("networkD3")
 load_and_install_if_necessary("janitor")
+
+if (!suppressPackageStartupMessages(library("data.table", character.only=TRUE, logical.return=TRUE))) {
+  cat(paste0("Package ", "data.table", " not found. Will install it."))
+  install.packages("data.table", repos="http://R-Forge.R-project.org")
+  library("data.table", character.only=TRUE)
+}
 
 
 source("data-processing.R")
