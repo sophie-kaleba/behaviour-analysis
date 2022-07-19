@@ -17,7 +17,7 @@ benchmark_name <- str_match(filename, "parsed\\_(.*?)\\.mylog")[2]
 data$Benchmark <- benchmark_name
 
 data <- data[!(`Builtin?` %like% "PROC|LAMBDA|block")]
-data <- data[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim)]
+data <- data[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim), .SDcols = is.character]
 
 data[ , 
       `:=`(Num.Receiver.Observed = n_distinct(Observed.Receiver), 
