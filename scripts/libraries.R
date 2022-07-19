@@ -47,6 +47,7 @@ source("machine_specs.R")
 source("behaviour-processing.R")
 source("target-polymorphism.R")
 source("splitting.R")
+source("performance-methods.R")
 
 is.empty <- function(x, mode=NULL,...){
   

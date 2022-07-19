@@ -7,7 +7,7 @@ source("./scripts/libraries.R", chdir=TRUE)
 # 
 # writeLines(paste("[INFO] Reading trace of ",benchmark_name,"located at",filename,". Generate the csv at",folder_out))
 
-#folder_out <- "/home/sopi/Documents/Side_projects/behaviour-analysis/results/07-06-22_16-08-09/results"
+folder_out <- "/home/sopi/Documents/Side_projects/behaviour-analysis/test_new_scripts"
 #benchmark_name <- "BlogRailsRoutesTwoRoutesTwoRequests"
 filename <- "./results/07-06-22_16-08-09/BlogRailsRoutesTwoRoutesTwoRequests_Jun07-2022_20:50:52/parsed_BlogRailsRoutesTwoRoutesTwoRequests.mylog"
 
@@ -17,7 +17,7 @@ benchmark_name <- str_match(filename, "parsed\\_(.*?)\\.mylog")[2]
 data$Benchmark <- benchmark_name
 
 data <- data[!(`Builtin?` %like% "PROC|LAMBDA|block")]
-data <- data[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim), .SDcols = is.character]
+data <- data[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim)]
 
 data[ , 
       `:=`(Num.Receiver.Observed = n_distinct(Observed.Receiver), 
@@ -44,7 +44,6 @@ data[ , "Split.Num.Targets" := n_distinct(Observed.Receiver), by=list(Source.Sec
 data[ , "Times.Splitted" := (n_distinct(CT.Address) - 1), by=list(Source.Section, Symbol)]
 
 ############################################## SPLITTING ############################################## 
-
 split_table <- copy(data)
 split_table[ , "Num.Calls.Target" := n_distinct(Call.ID), by=list(Source.Section, Symbol, Benchmark)]
 split_table <- split_table[, .(Call.ID, Symbol, Source.Section, CT.Address, Observed.Receiver, Benchmark, Num.Calls.Target)]
@@ -59,7 +58,7 @@ split_table <- NULL
 prev_wd <- getwd()
 target_dir <- file.path(getwd(), "splitting-transition","out","production","splitting-transition")
 setwd(target_dir)
-#system2("java", paste(" CallSiteAnalyzer",split_file, out_split_file, sep=" "))
+system2("java", paste(" CallSiteAnalyzer",split_file, out_split_file, sep=" "))
 
 setwd(prev_wd)
 row_names <- c("Source.Section", "Symbol", "Start.ID", "End.ID", "Start.State", "End.State", "Start.Cache.Size", "End.Cache.Size", "Union.Size", "Intersect.Size", "Benchmark", "Num.Calls.Target")
@@ -146,42 +145,28 @@ table_one <-  table_one[data[ , .(Split.Num.Calls = n_distinct(Call.ID),
 transition_data[ , "Times.Splitted" := rowSums(.SD), .SDcols=is.numeric]
 table_one <-  table_one[transition_data[, c("Benchmark","Times.Splitted")]]
 
-
 ###### SUMMARY TABLE TWO
 # Table summarizing the amount of call sites being mono, poly, mega
 # In addition to this table, it would be nice to have a table listing the different call-sites of a benchmark, as well as their different receivers throughout runtime?
 # Again, 3 different tables
 # In essence:
 # Benchmark Lexical.Location Symbol Cache.State Receivers 
-
-generate_table_two <- function(df, receiver_to_ditch, receveiver_to_keep, call_site_type, keep_ct = NULL) {
-  table_two <- df %>%
-    select(-{{receiver_to_ditch}}, -Call.ID, -Builtin.) %>%
-    select(Benchmark, Source.Section, Symbol, {{receveiver_to_keep}}, all_of(keep_ct), Num.Receiver) %>%
-    add_lookup_status(call_site_type) %>%
-    distinct() %>%
-    arrange(Source.Section, Symbol, {{receveiver_to_keep}}, Num.Receiver)
-  return(table_two)
-}
-
-table_two_before <- generate_table_two(before_all_optim, Observed.Receiver, Original.Receiver, Call.Site) %>% filter(Cache.Type != "MONO")
-table_two_tp <- generate_table_two(after_tp, Original.Receiver, Observed.Receiver, Call.Site) %>% filter(Cache.Type != "MONO")
-table_two_spliting <- generate_table_two(after_splitting, Original.Receiver, Observed.Receiver, Call.Site.Target, "CT.Address") %>% filter(Cache.Type != "MONO")
+table_two_before <- dt_generate_table_two(data, Observed.Receiver, Original.Receiver, c("Source.Section", "Symbol"), Before.Num.Targets) %>% filter(Cache.Type != "MONO")
+table_two_tp <- dt_generate_table_two(data, Original.Receiver, Observed.Receiver, Call.Site, TP.Num.Targets) %>% filter(Cache.Type != "MONO")
+table_two_spliting <- dt_generate_table_two(data, Original.Receiver, Observed.Receiver, Call.Site.Target, Split.Num.Targets, "CT.Address") %>% filter(Cache.Type != "MONO")
 
 ############################################## SAVE AS CSV ###############################################
-write_on_disk <- function(df, name, path = "") {
-  write.table(df,paste(path,paste(benchmark_name, name,".csv",sep="-"), sep="/"), col.names = TRUE, row.names = FALSE) 
+dt_write_on_disk <- function(dt, name, path = "") {
+  fwrite(dt, file.path(path,paste(benchmark_name,"-",name,".csv",sep="")), col.names = TRUE, row.names = FALSE, sep=" ")
 }
 
-if (!dir.exists(file.path(folder_out,"Status")) & !dir.exists(file.path(folder_out,"PolyDetails"))) {
-  dir.create(file.path(folder_out,"Status"), recursive = TRUE)
-  dir.create(file.path(folder_out,"PolyDetails"), recursive = TRUE)
+if (!dir.exists(file.path(folder_out,"General")) & !dir.exists(file.path(folder_out,"Details"))) {
+  dir.create(file.path(folder_out,"General"), recursive = TRUE)
+  dir.create(file.path(folder_out,"Details"), recursive = TRUE)
 }
 
-write_on_disk(table_one_before, "table_one_before", file.path(folder_out,"Status"))
-write_on_disk(table_one_tp, "table_one_tp", file.path(folder_out,"Status"))
-write_on_disk(table_one_splitting, "table_one_splitting", file.path(folder_out,"Status"))
+dt_write_on_disk(table_one, "table_one", file.path(folder_out,"General"))
 
-write_on_disk(table_two_before, "table_two_before", file.path(folder_out,"PolyDetails"))
-write_on_disk(table_two_tp, "table_two_tp", file.path(folder_out,"PolyDetails"))
-write_on_disk(table_two_spliting, "table_two_spliting", file.path(folder_out,"PolyDetails"))
+dt_write_on_disk(table_two_before, "table_two_before", file.path(folder_out,"Details"))
+dt_write_on_disk(table_two_tp, "table_two_tp", file.path(folder_out,"Details"))
+dt_write_on_disk(table_two_spliting, "table_two_spliting", file.path(folder_out,"Details"))
