@@ -18,7 +18,7 @@ if (Sys.getenv("RSTUDIO") == "1") {
 
 source("./scripts/libraries.R", chdir=TRUE)
   
-data <- load_data_file(filename)
+data <- load_data_file("./results/07-06-22_16-08-09/BlogRailsRoutesTwoRoutesTwoRequests_Jun07-2022_20:50:52/parsed_BlogRailsRoutesTwoRoutesTwoRequests.mylog")
 data <- as_tibble(data)
 
 # split_truffle <- read.csv("./truffle_split_targets_toto", sep=",", row.names = NULL, col.names=c("Target","Times.Splitted", "Call.Type"))

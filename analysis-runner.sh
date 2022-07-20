@@ -96,15 +96,15 @@ PSD=("PsdColorCmykToRgb"
 
 # FOLDER=$(date "+%d-%m-%y_%H-%M-%S")
 # mkdir results/$FOLDER
-FOLDER="07-06-22_16-08-09"
+#FOLDER="./results/07-06-22_16-08-09/CLOSURES"
 
 # for b in ${TRUBY[@]}; do
-# 	make benchmark_name=$b iterations="1" inner_iterations="1" FOLDER=$FOLDER all
+# 	make benchmark_name=$b iterations="1" inner_iterations="1" FOLDER=$FOLDER FLAGS="--splitting --yield-always-clone=false" run parse reorganize
 # 	wait $!
 # done
 
 # for b in ${AWFY[@]}; do
-# 	make benchmark_name=$b iterations="1" inner_iterations="1" FOLDER=$FOLDER all
+# 	make benchmark_name=$b iterations="1" inner_iterations="1" FOLDER=$FOLDER FLAGS="--splitting --yield-always-clone=false" run parse reorganize
 # 	wait $!
 # done
 
@@ -114,17 +114,17 @@ for b in ${YJIT[@]}; do
 done
 
 # for b in ${RAILS[@]}; do
-# 	make benchmark_name=$b iterations="1" inner_iterations="1" FOLDER=$FOLDER all
+# 	make benchmark_name=$b iterations="1" inner_iterations="1" FOLDER=$FOLDER FLAGS="--splitting --yield-always-clone=false" run parse reorganize
 # 	wait $!
 # done
 
 # for b in ${CHUNKY[@]}; do
-# 	make benchmark_name=$b iterations="1" inner_iterations="1" FOLDER=$FOLDER all
+# 	make benchmark_name=$b iterations="1" inner_iterations="1" FOLDER=$FOLDER FLAGS="--splitting --yield-always-clone=false" run parse reorganize
 # 	wait $!
 # done
 
 # for b in ${PSD[@]}; do
-# 	make benchmark_name=$b iterations="1" inner_iterations="1" FOLDER=$FOLDER all
+# 	make benchmark_name=$b iterations="1" inner_iterations="1" FOLDER=$FOLDER FLAGS="--splitting --yield-always-clone=false" run parse reorganize
 # 	wait $!
 # done
 

@@ -1,5 +1,5 @@
 #!/bin/sh
-FOLDER="results/07-06-22_16-08-09"
+FOLDER="results/07-06-22_16-08-09/"
 ROOT="/home/sopi/Documents/Side_projects/behaviour-analysis"
 ALL_FILES_FOLDER=${ROOT}/$FOLDER/all
 
@@ -20,8 +20,8 @@ for f in `ls ${ROOT}/${FOLDER}`; do
 	untar_file ./parsed_${BENCH_NAME}.mylog.tar.lz4  .
 
 	cd ${ROOT}
-	Rscript ${ROOT}/quick.Rnw ${BENCH_NAME} ${FOLDER} ${ROOT}/${FOLDER}/$f/parsed_${BENCH_NAME}.mylog
-    #Rscript ${ROOT}/generate_light_csv.Rnw ${BENCH_NAME} ${FOLDER} ${ROOT}/${FOLDER}/$f/parsed_${BENCH_NAME}.mylog
+	#Rscript ${ROOT}/quick.Rnw ${BENCH_NAME} ${FOLDER} ${ROOT}/${FOLDER}/$f/parsed_${BENCH_NAME}.mylog
+    Rscript ${ROOT}/generate_light_csv.Rnw ${BENCH_NAME} ${FOLDER} ${ROOT}/${FOLDER}/$f/parsed_${BENCH_NAME}.mylog
 
 	cd ${ROOT}/${FOLDER}/$f
 	tar_file parsed_${BENCH_NAME}.mylog
@@ -29,5 +29,5 @@ for f in `ls ${ROOT}/${FOLDER}`; do
 done
 
 #for fi in `ls ${ALL_FILES_FOLDER}`; do 
-	#Rscript knit_merge.R merge_tables.Rnw tables.tex ${ROOT}/${FOLDER}/results #${ALL_FILES_FOLDER}
+	# Rscript knit_merge.R merge_tables.Rnw tables.tex ${ROOT}/${FOLDER}/results #${ALL_FILES_FOLDER}
 #done
