@@ -4,11 +4,7 @@ args = commandArgs(trailingOnly=TRUE)
 benchmark_name = args[1]
 folder_out = args[2]
 filename = args[3]
-
-#folder_out <- "/home/sopi/Documents/Side_projects/behaviour-analysis/test_new_scripts"
-#benchmark_name <- "BlogRailsRoutesTwoRoutesTwoRequests"
-#filename <- "./results/07-06-22_16-08-09/BlogRailsRoutesTwoRoutesTwoRequests_Jun07-2022_20:50:52/parsed_BlogRailsRoutesTwoRoutesTwoRequests.mylog"
-
+ 
 col_names <- c("Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver")
 data <- fread(filename, header = FALSE, sep="\t", col.names = col_names)
 benchmark_name <- str_match(filename, "parsed\\_(.*?)\\.log")[2]
@@ -19,7 +15,7 @@ data <- data[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim)]
 
 data[ , 
       `:=`(Num.Receiver.Observed = n_distinct(Observed.Receiver), 
-           Num.Receiver.Original = n_distinct(Original.Receiver)), by=list(Source.Section, Symbol, Benchmark)]
+       Num.Receiver.Original = n_distinct(Original.Receiver)), by=list(Source.Section, Symbol, Benchmark)]
 
 # These 3 tables should be feed as input to build table one and table two
 # WIP - we might not need to have 3 different tables (heavy on memory), we could keep one table, and have 
@@ -72,9 +68,9 @@ transition_data[ , "Transition.Type" := (fcase(
 transition_data <- transition_data[ , .("Num.Transitions" = n_distinct(Source.Section, Symbol)), by=list(Benchmark, Start.State, End.State, Transition.Type)]
 
 transition_data <- transition_data %>% 
-  tidyr::unite("Transition", Start.State:End.State, remove = TRUE, sep=" -> ") %>%
-  tidyr::unite("Transition", Transition:Transition.Type, remove = TRUE, sep="_") %>%
-  tidyr::spread(Benchmark, Num.Transitions)
+    tidyr::unite("Transition", Start.State:End.State, remove = TRUE, sep=" -> ") %>%
+    tidyr::unite("Transition", Transition:Transition.Type, remove = TRUE, sep="_") %>%
+    tidyr::spread(Benchmark, Num.Transitions)
 
 old_cols <- c("MONOMORPHIC -> MONOMORPHIC_Different",
               "MONOMORPHIC -> MONOMORPHIC_Same",
@@ -117,28 +113,24 @@ setnames(transition_data, old_cols, new_cols, skip_absent = TRUE)
 # We should ouput a csv containing this table, that will later be read and aggregated with other benchmarks
 # The merging should auto fill missing columns with 0s (not NAs)
 
+table_one <- data[ , .("Before.Num.Call.Sites" = n_distinct(Source.Section, Symbol),
+                       "Before.Num.Calls" = n_distinct(Call.ID)),
+                        by = list(Benchmark, Before.Num.Targets)]
+table_one <- dcast(table_one, Benchmark ~ Before.Num.Targets, value.var = c("Before.Num.Calls", "Before.Num.Call.Sites"))
 
-table_one <- data[ , .(Before.Num.Calls = n_distinct(Call.ID), 
-                       Before.Num.Call.Sites = n_distinct(Source.Section, Symbol),
-                       Benchmark),
-                   by = "Before.Num.Targets"][, dcast(.SD, 
-                                                      Benchmark ~ Before.Num.Targets,
-                                                      value.var = c("Before.Num.Calls", "Before.Num.Call.Sites"))]
+tp_aux <- data[ , .("TP.Num.Calls" = n_distinct(Call.ID), 
+                    "TP.Num.Call.Sites" = n_distinct(Source.Section, Symbol)),
+                by = list(Benchmark, TP.Num.Targets)]
+tp_aux <- dcast(tp_aux,  Benchmark ~ TP.Num.Targets, value.var = c("TP.Num.Calls", "TP.Num.Call.Sites"))
+                
+table_one <- table_one[tp_aux, on = "Benchmark"]
 
-table_one <- table_one[data[ , .(TP.Num.Calls = n_distinct(Call.ID), 
-                                 TP.Num.Call.Sites = n_distinct(Source.Section, Symbol),
-                                 Benchmark),
-                             by = "TP.Num.Targets"][, dcast(.SD, 
-                                                            Benchmark ~ TP.Num.Targets,
-                                                            value.var = c("TP.Num.Calls", "TP.Num.Call.Sites"))]]
+split_aux <- data[ , .(Split.Num.Calls = n_distinct(Call.ID), 
+                       Split.Num.Call.Sites = n_distinct(Source.Section, Symbol)), #This is weird - is this correct?
+                   by = list(Benchmark, Split.Num.Targets)]
+split_aux <- dcast(split_aux, Benchmark ~ Split.Num.Targets, value.var = c("Split.Num.Calls", "Split.Num.Call.Sites"))
 
-table_one <-  table_one[data[ , .(Split.Num.Calls = n_distinct(Call.ID), 
-                                  Split.Num.Call.Sites = n_distinct(Source.Section, Symbol), #This is weird - is this correct?
-                                  Benchmark),
-                              by = "Split.Num.Targets"][, dcast(.SD, 
-                                                                Benchmark ~ Split.Num.Targets,
-                                                                value.var = c("Split.Num.Calls", "Split.Num.Call.Sites"))]]
-
+table_one <-  table_one[split_aux, on = "Benchmark"]
 
 transition_data[ , "Times.Splitted" := rowSums(.SD), .SDcols=is.numeric]
 table_one <-  table_one[transition_data[, c("Benchmark","Times.Splitted")]]
@@ -167,4 +159,4 @@ dt_write_on_disk(table_one, "table_one", file.path(folder_out,"General"))
 
 dt_write_on_disk(table_two_before, "table_two_before", file.path(folder_out,"Details"))
 dt_write_on_disk(table_two_tp, "table_two_tp", file.path(folder_out,"Details"))
-dt_write_on_disk(table_two_spliting, "table_two_spliting", file.path(folder_out,"Details"))
+dt_write_on_disk(table_two_spliting, "table_two_splitting", file.path(folder_out,"Details"))
