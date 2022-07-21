@@ -156,7 +156,7 @@ if (!dir.exists(file.path(folder_out,"General")) & !dir.exists(file.path(folder_
 }
 
 dt_write_on_disk(table_one, "table_one", file.path(folder_out,"General"))
-dt_write_on_disk(table_one, "split_transitions", file.path(folder_out,"General"))
+dt_write_on_disk(table_split_transitions, "split_transitions", file.path(folder_out,"General"))
 
 dt_write_on_disk(table_two_before, "table_two_before", file.path(folder_out,"Details"))
 dt_write_on_disk(table_two_tp, "table_two_tp", file.path(folder_out,"Details"))
