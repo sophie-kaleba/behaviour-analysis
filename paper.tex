@@ -32,137 +32,99 @@
 
 \newcommand{\refext}[1]{\detokenize{#1}}
 
-\input{gen-eval}
+\input{tables}
 
 
 \begin{document}
 
-\title{Ruby-on-rails applications - Analysis on call-site behaviour}
+\title{Ruby-on-rails applications - Analysis of call-site behaviour}
 
 \author{Sophie Kaleba}
 \email{s.kaleba@kent.ac.uk}
 
 \maketitle
 
-\section{Introduction}
+%!TEX root = paper.tex
 
-These are results are about the \BenchmarkName benchmark, that has been run for \NumIterations iterations, and \NumInnerIterations inner iterations, on a \Hihaho.
-The flags used were: $\Flags$
-The raw log file is located at $\LogFilename$. 
+\section{General characteristics}
 
-\section{Global behaviour}
+\begin{table}[h!]
+	\centering
+	\resizebox{\linewidth}{!}{
+	\GeneralMetrics
+	}
+	\caption{General data about the benchmark}
+\end{table}
 
-In this experiment, \NumberCallSites call-sites were executed, totaling \NumberCalls calls.  
-The following table lists the thirty most executed call-sites within this execution\footnote{This does not account for the actual execution time spent}.
+\section{Call-site behaviour}
 
-\MostExecutedCallSite
+This table shows the impact of call-site optimisations on the size of the biggest lookup cache.
+Each column represents the size of the biggest lookup cache, respectively before any optimisation, after eliminating duplicates ("TP"), and after applying splitting ("SPLIT").
 
-\section{Call-site behaviours}
+\begin{table}[h!]
+	\centering
+	\Extent
+	\caption{Impact of call-site optimisations on the maximum number of different targets in cache}
+\end{table}
 
-\subsection{Splitting}
+\subsection{Impact of eliminating target duplication}
 
-Within this execution, \NumOfSplittedTargets call-sites have been splitted, totalling \NumsOfSplits
-Some call-targets have been splitted several times; the following table list all the call targets that have been splitted.
+\subsubsection{\textbf{Impact on calls}}
 
-\newpage
+Amount of monomorphic, polymorphic and megamorphic calls before eliminating target duplication.
+Change. represents the change (in \%) of the number of calls per category, after eliminating target duplication.
 
-\begin{landscape}
-\begin{figure}[h]
-  \centering
-  \Splitting
-  \caption{
-    30th most splitted targets}
-\end{figure}
-\end{landscape}
+\begin{table}[!h]
+	\centering
+	\BeforeAfterTPCalls
+	\caption{Eliminating target duplication: impact on calls}
+\end{table}
 
-\begin{figure}[h]
-  \centering
-  \EffectSplittingSites
-  \caption{
-    Effect of splitting on lookup-cache status (number of sites impacted)}
-\end{figure}
+\subsubsection{\textbf{Impact on call sites}}
 
-\begin{figure}[h]
-  \centering
-  \EffectSplittingFrequency
-  \caption{
-    Effect of splitting on lookup-cache status (on all splits)}
-\end{figure}
+Amount of monomopphic, polymorphic and megamorphic call-sites before eliminating target duplication.
+Change. represents the change (in \%) of the number of call-sites per category, after eliminating target duplication.
 
+\begin{table}[h!]
+	\centering
+	\BeforeAfterTPSites
+	\caption{Eliminating target duplication: impact on call-sites}
+\end{table}
 
-\subsection{Type of lookup caches}
+\subsection{Impact of splitting}
+After having eliminated target duplication
 
-\subsubsection{Receiver polymorphism}
+\subsubsection{\textbf{Impact on calls}}
 
-\begin{figure}[h!]
-  \centering
-  \CacheDistribObservedSplitting
-  \caption{
-    Observed cache distribution}
-\end{figure}
+Amount of monomorphic, polymorphic and megamorphic calls before splitting, but after having eliminated target duplicates.
+Change. represents the change (in \%) of the number of calls per category, after applying splitting.
 
+\begin{table}[h!]
+	\centering	
+	\BeforeAfterSplitCalls
+	\caption{Splitting: impact on calls}
+\end{table}
 
-\begin{figure}[h!]
-  \centering
-  \CacheDistribOriginalSplitting
-  \caption{
-    Original cache distribution}
-\end{figure}
+\subsubsection{\textbf{Impact on call sites}}
 
+Amount of monomorphic, polymorphic and megamorphic call-sites before splitting, but after having eliminated target duplicates.
+Change. represents the change (in \%) of the number of call-sites per category, after applying splitting.
 
-\subsubsection{Target polymorphism}
+\begin{table}[h!]
+	\centering
+	\BeforeAfterSplitSites
+	\caption{Splitting: impact on call-sites}
+\end{table}
 
-\begin{figure}[h!]
-  \centering
-  \TargetPolymorphism
-  \caption{
-    Impact of optimization regarding target polymorphism}
-\end{figure}
+\section{Detailed summary of splitting behaviour}
 
-\begin{landscape}
-\begin{figure}[h]
-  \centering
-  \TargetPolymorphismDetails
-  \caption{
-    Detailed impact with the evolution of cache entries}
-\end{figure}
-\end{landscape}
+This table displays the different splitting transitions that occurred. They mention the state of the lookup cache before and after splitting. The number corresponds to the number of splits.
 
-
-%\subsection{Type of call-sites as per ruby semantics}
-%
-%%There are XXXX different types of calls in Ruby:
-%%\begin{itemize}
-%%\item 
-%%\item 
-%%\item 
-%%\end{itemize}
-%
-%The following table displays basic summary data based on the type of ruby call-site.
-
-
-
-\section{Identifying patterns in execution}
-
-The call-sites qualifying for phase-based splitting have to fit within a set of criterion; namely, they have to:
- \begin{itemize}
- \item be polymorphic or megamorphic
- \item be called a significant amount of times at runtime
- \end{itemize}
-
-A manual inspection is then required to identify potential phases based on the lookup cache type. The following table lists the first forty-five most executed polymorphic call-sites.
-
-\begin{landscape}
-
-\SuperHottestMegamorphic{}
-
-\end{landscape}
-
-\appendix
-
-\bibliographystyle{ACM-Reference-Format}
-\bibliography{sample-base}
-
+\begin{table}[h!]
+	\centering
+	\SplittingTransitions
+	\caption{The different splitting transitions}
+\end{table}
 
 \end{document}
 \endinput
