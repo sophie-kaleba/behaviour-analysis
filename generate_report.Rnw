@@ -178,26 +178,19 @@ table_four_max <- table_before_aux %>%
 table_split_transitions <- load_all_tables(folder_status, patt="split")
 
 ############################################## LATEX FORMATTING ###############################################
-table_one_latex <- kableExtra::kable(table_one, booktabs = TRUE, align = "r") %>%
-  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
+table_one_latex <- kableExtra::kable(table_one, booktabs = TRUE, align = "r")
 
-table_two_sites_latex <- kableExtra::kable(table_two_aftertp %>% select(-Max.Target, -TP_Max.Target, -contains("Calls"), -contains("TP")), booktabs = TRUE, align = "r") %>%
-  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
+table_two_sites_latex <- kableExtra::kable(table_two_aftertp %>% select(-Max.Target, -TP_Max.Target, -contains("Calls"), -contains("TP")), booktabs = TRUE, align = "r")
 
-table_two_calls_latex <- kableExtra::kable(table_two_aftertp %>% select(-Max.Target, -TP_Max.Target, -contains("Sites"), -contains("TP")), booktabs = TRUE, align = "r") %>%
-  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
+table_two_calls_latex <- kableExtra::kable(table_two_aftertp %>% select(-Max.Target, -TP_Max.Target, -contains("Sites"), -contains("TP")), booktabs = TRUE, align = "r")
 
-table_three_sites_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Calls"), -contains("SPLIT")), booktabs = TRUE, align = "r") %>%
-  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
+table_three_sites_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Calls"), -contains("SPLIT")), booktabs = TRUE, align = "r")
 
-table_three_calls_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Sites"), -contains("SPLIT")), booktabs = TRUE, align = "r") %>%
-  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
+table_three_calls_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Sites"), -contains("SPLIT")), booktabs = TRUE, align = "r")
 
-table_four_latex <- kableExtra::kable(table_four_max, booktabs = TRUE, align = "r") %>%
-  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
+table_four_latex <- kableExtra::kable(table_four_max, booktabs = TRUE, align = "r")
 
-table_split_transitions_latex <- kableExtra::kable(table_split_transitions, booktabs = TRUE, align = "r") %>%
-  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
+table_split_transitions_latex <- kableExtra::kable(table_split_transitions, booktabs = TRUE, align = "r")
 
 ############################################## LATEX MACROS GENERATION ##############################################
 
