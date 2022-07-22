@@ -10,12 +10,12 @@ public class Benchmark {
         this.name = name;
     }
 
-    public void addSite(CallSite currentSite, CallTarget currentTarget, CallTarget.Call call) {
+    public void addSite(CallSite currentSite, CallTarget currentTarget) {
         if (!this.sites.contains(currentSite)) {
             this.sites.add(currentSite);
         }
 
-        this.sites.get(this.sites.indexOf(currentSite)).addTarget(currentTarget, call);
+        this.sites.get(this.sites.indexOf(currentSite)).addTarget(currentTarget);
     }
 
     @Override

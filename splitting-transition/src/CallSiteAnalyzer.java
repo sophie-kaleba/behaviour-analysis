@@ -4,8 +4,6 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -34,8 +32,6 @@ public class CallSiteAnalyzer {
     public static void analyzeRun() {
         for (Benchmark benchmark: benchmarks) {
             for (CallSite site: benchmark.sites) {
-
-                Collections.sort(site.getTargets());
 
                 for (CallTarget ct : site.getTargets()) {
                     setTargetStatus(ct);
@@ -66,8 +62,7 @@ public class CallSiteAnalyzer {
                 Integer.toString(ct.numberReceivers()),
                 Integer.toString(union),
                 Integer.toString(intersect),
-                benchmark.name,
-                Integer.toString(prev_ct.numCalls)});
+                benchmark.name});
     }
 
     public static void setTargetStatus(CallTarget ct) {
@@ -81,21 +76,21 @@ public class CallSiteAnalyzer {
     }
 
     public static void parseRow(String[] row) {
-        int callID = Integer.parseInt(row[0]);
-        String symbol = row[1];
-        String sourceSection = row[2];
+        String benchmark = row[0];
+        String sourceSection = row[1];
+        String symbol = row[2];
         int targetAddress = Integer.parseInt(row[3]);
-        String receiver = row[4];
-        String benchmark = row[5];
-        int numCalls = Integer.parseInt(row[6]);
+        int startID = Integer.parseInt(row[4]);
+        int endID = Integer.parseInt(row[5]);
+        String receiver = row[6];
+
         Benchmark currentBenchmark = new Benchmark(benchmark);
         CallSite currentSite = new CallSite(sourceSection, symbol);
-        CallTarget currentTarget = new CallTarget(targetAddress, numCalls);
-        CallTarget.Call call = new CallTarget.Call(callID, receiver);
+        CallTarget currentTarget = new CallTarget(targetAddress, startID, endID, receiver);
         if (!benchmarks.contains(currentBenchmark)) {
             benchmarks.add(currentBenchmark);
         }
-        benchmarks.get(benchmarks.indexOf(currentBenchmark)).addSite(currentSite, currentTarget, call);
+        benchmarks.get(benchmarks.indexOf(currentBenchmark)).addSite(currentSite, currentTarget);
     }
 
     public static void printToCsv(String filename) throws IOException {

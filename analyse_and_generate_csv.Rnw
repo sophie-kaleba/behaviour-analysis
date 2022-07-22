@@ -4,7 +4,11 @@ args = commandArgs(trailingOnly=TRUE)
 benchmark_name = args[1]
 folder_out = args[2]
 filename = args[3]
- 
+
+# benchmark_name = "DeltaBlue"
+# folder_out = "../results/latest"
+# filename = "../results/21-07-22_23-36-27/DeltaBlue/parsed_DeltaBlue.log"
+
 col_names <- c("Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver")
 data <- fread(filename, header = FALSE, sep="\t", col.names = col_names)
 benchmark_name <- str_match(filename, "parsed\\_(.*?)\\.log")[2]
@@ -13,10 +17,13 @@ data$Benchmark <- benchmark_name
 data <- data[!(`Builtin?` %like% "PROC|LAMBDA|block")]
 data <- data[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim)]
 
+gc()
+
 data[ , 
       `:=`(Num.Receiver.Observed = n_distinct(Observed.Receiver), 
        Num.Receiver.Original = n_distinct(Original.Receiver)), by=list(Source.Section, Symbol, Benchmark)]
 
+gc()
 # These 3 tables should be feed as input to build table one and table two
 # WIP - we might not need to have 3 different tables (heavy on memory), we could keep one table, and have 
 # 3 different columns: Num.Target.Original, Num.Target.Observed, Num.Target.Observed.W.Splitting
@@ -39,8 +46,17 @@ data[ , "Times.Splitted" := (n_distinct(CT.Address) - 1), by=list(Source.Section
 
 ############################################## SPLITTING ############################################## 
 split_table <- copy(data)
-split_table[ , "Num.Calls.Target" := n_distinct(Call.ID), by=list(Source.Section, Symbol, Benchmark)]
-split_table <- split_table[, .(Call.ID, Symbol, Source.Section, CT.Address, Observed.Receiver, Benchmark, Num.Calls.Target)]
+#split_table[ , "Num.Calls.Target" := n_distinct(Call.ID), by=list(Source.Section, Symbol, Benchmark)] don't think we actually use it
+
+split_table <- split_table[ , .(Start.Time = first(Call.ID),
+                    End.Time = last(Call.ID),
+                    Observed.Receiver), by = list(Benchmark, Source.Section, Symbol, CT.Address) ]
+
+#split_table <- split_table[, .(Benchmark, Source.Section, Symbol, CT.Address, Start.Time, End.Time, Observed.Receiver)]
+split_table <- unique(split_table)
+setorderv(split_table, c("Benchmark", "Source.Section", "Symbol", "CT.Address", "Start.Time"))
+#split_table <- split_table[, .(Call.ID, Symbol, Source.Section, CT.Address, Observed.Receiver, Benchmark)]
+gc()
 
 # and export it as a csv file so our java program can analyse it
 split_file <-  paste(getwd(),"/",benchmark_name,"_splitting_data.csv", sep="")

@@ -1,29 +1,19 @@
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
-import java.util.TreeSet;
 
 public class CallTarget implements Comparable<CallTarget> {
     public int address;
-    public TreeSet<Integer> ids = new TreeSet<>();
     public HashSet<String> receivers = new HashSet<>();
     public int startID;
     public int endID;
     public CacheType type;
-    public int numCalls;
 
-    public CallTarget(int hash, int numCalls) {
+    public CallTarget(int hash, int startID, int endID, String receiver) {
         this.address = hash;
-        this.startID = -1;
-        this.endID = -1;
-        this.numCalls = numCalls;
-    }
-
-    public void addObservation(CallTarget.Call call) {
-        this.ids.add(call.id);
-        this.startID = ids.first();
-        this.endID = ids.last();
-        this.receivers.add(call.receiver);
+        this.startID = startID;
+        this.endID = endID;
+        receivers.add(receiver);
     }
 
     public int intersect(HashSet<String> receivers) {
@@ -66,15 +56,5 @@ public class CallTarget implements Comparable<CallTarget> {
     @Override
     public int compareTo(CallTarget target) {
         return Integer.compare(this.startID, target.startID);
-    }
-
-    public static class Call {
-        public int id;
-        public String receiver;
-
-        public Call(int id, String receiver) {
-            this.id = id;
-            this.receiver = receiver;
-        }
     }
 }

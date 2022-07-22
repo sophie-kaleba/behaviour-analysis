@@ -18,7 +18,7 @@ public class CallSite {
         return this.targets;
     }
 
-    public void addTarget(CallTarget target, CallTarget.Call call) {
+    public void addTarget(CallTarget target) {
         boolean found = false;
         Iterator<CallTarget> it = this.targets.iterator();
 
@@ -31,7 +31,6 @@ public class CallSite {
         }
 
         if (!found) targets.add(target);
-        this.targets.get(this.targets.indexOf(target)).addObservation(call);
     }
 
     @Override
