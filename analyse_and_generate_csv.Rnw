@@ -71,7 +71,7 @@ setwd(target_dir)
 system2("java", paste(" CallSiteAnalyzer",split_file, out_split_file, sep=" "))
 
 setwd(prev_wd)
-row_names <- c("Source.Section", "Symbol", "Start.ID", "End.ID", "Start.State", "End.State", "Start.Cache.Size", "End.Cache.Size", "Union.Size", "Intersect.Size", "Benchmark", "Num.Calls.Target")
+row_names <- c("Source.Section", "Symbol", "Start.ID", "End.ID", "Start.State", "End.State", "Start.Cache.Size", "End.Cache.Size", "Union.Size", "Intersect.Size", "Benchmark")
 transition_data <- fread(out_split_file, header = FALSE, sep=",", col.names=row_names)
 
 transition_data[ , "Transition.Type" := (fcase(
