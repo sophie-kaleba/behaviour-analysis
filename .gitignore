@@ -1,0 +1,7 @@
+Archive/
+cov_folder/
+results/
+Split/
+.idea
+*.csv
+*.data
