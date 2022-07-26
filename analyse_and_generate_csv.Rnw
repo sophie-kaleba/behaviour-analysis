@@ -24,20 +24,6 @@ data[ ,
        Num.Receiver.Original = n_distinct(Original.Receiver)), by=list(Source.Section, Symbol, Benchmark)]
 
 gc()
-# These 3 tables should be feed as input to build table one and table two
-# WIP - we might not need to have 3 different tables (heavy on memory), we could keep one table, and have 
-# 3 different columns: Num.Target.Original, Num.Target.Observed, Num.Target.Observed.W.Splitting
-# before_all_optim <- copy(data)
-# before_all_optim[, Num.Receiver.Observed := NULL]
-# setnames(before_all_optim, "Num.Receiver.Original", "Num.Receiver")
-# 
-# after_tp <- copy(data)
-# after_tp[, Num.Receiver.Original := NULL]
-# setnames(after_tp, "Num.Receiver.Observed", "Num.Receiver")
-# 
-# after_splitting <- copy(data)
-# after_splitting[, Num.Receiver.Observed := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, CT.Address, Benchmark)]
-# setnames(after_splitting, "Num.Receiver.Observed", "Num.Receiver")
 
 setnames(data,"Num.Receiver.Original", "Before.Num.Targets")
 setnames(data,"Num.Receiver.Observed", "TP.Num.Targets")
@@ -59,7 +45,7 @@ setorderv(split_table, c("Benchmark", "Source.Section", "Symbol", "CT.Address", 
 gc()
 
 # and export it as a csv file so our java program can analyse it
-split_file <-  paste(getwd(),"/",benchmark_name,"_splitting_data.csv", sep="")
+split_file <-  file.path(folder_out, paste(benchmark_name,"_splitting_data.csv", sep=""))
 out_split_file <- file.path(folder_out, paste("out_",benchmark_name,"_splitting_data.csv", sep=""))      
 fwrite(split_table, split_file, row.names = FALSE)
 split_table <- NULL
