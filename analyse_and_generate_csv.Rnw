@@ -6,10 +6,11 @@ folder_out = args[2]
 filename = args[3]
 
 # benchmark_name = "DeltaBlue"
-# folder_out = "../results/latest"
-# filename = "../results/21-07-22_23-36-27/DeltaBlue/parsed_DeltaBlue.log"
+# folder_out = "../results/26-07-22_08-11-19/DeltaBlue/"
+# filename = "../results/26-07-22_08-11-19/DeltaBlue/parsed_DeltaBlue.log"
 
-col_names <- c("Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver")
+# col_names <- c("Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver")
+col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver")
 data <- fread(filename, header = FALSE, sep="\t", col.names = col_names)
 benchmark_name <- str_match(filename, "parsed\\_(.*?)\\.log")[2]
 data$Benchmark <- benchmark_name
@@ -37,11 +38,9 @@ split_table <- copy(data)
 split_table <- split_table[ , .(Start.Time = first(Call.ID),
                     End.Time = last(Call.ID),
                     Observed.Receiver), by = list(Benchmark, Source.Section, Symbol, CT.Address) ]
-
-#split_table <- split_table[, .(Benchmark, Source.Section, Symbol, CT.Address, Start.Time, End.Time, Observed.Receiver)]
 split_table <- unique(split_table)
 setorderv(split_table, c("Benchmark", "Source.Section", "Symbol", "CT.Address", "Start.Time"))
-#split_table <- split_table[, .(Call.ID, Symbol, Source.Section, CT.Address, Observed.Receiver, Benchmark)]
+
 gc()
 
 # and export it as a csv file so our java program can analyse it
@@ -67,6 +66,13 @@ transition_data[ , "Transition.Type" := (fcase(
   default = "Different")
 )]
 
+
+detailed_transition_data <- transition_data[Transition.Type == "Different"][ , `:=`(Start.Cache.Size = NULL,
+                                                                                    End.Cache.Size = NULL,
+                                                                                    Union.Size = NULL,
+                                                                                    Intersect.Size = NULL)]
+
+# from there, the data get summarized
 transition_data <- transition_data[ , .("Num.Transitions" = n_distinct(Source.Section, Symbol)), by=list(Benchmark, Start.State, End.State, Transition.Type)]
 
 transition_data <- transition_data %>% 
@@ -159,6 +165,7 @@ if (!dir.exists(file.path(folder_out,"General")) & !dir.exists(file.path(folder_
 
 dt_write_on_disk(table_one, "table_one", file.path(folder_out,"General"))
 dt_write_on_disk(transition_data, "split_transitions", file.path(folder_out,"General"))
+dt_write_on_disk(detailed_transition_data, "detailed_split_transitions", file.path(folder_out,"Details"))
 
 dt_write_on_disk(table_two_before, "table_two_before", file.path(folder_out,"Details"))
 dt_write_on_disk(table_two_tp, "table_two_tp", file.path(folder_out,"Details"))
