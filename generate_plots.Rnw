@@ -42,12 +42,11 @@ data[ , "Split.Lookup.Status" := (fcase(
   ((Split.Num.Receiver.Observed  > 1) & (Split.Num.Receiver.Observed  <= 8)), "POLY",
   (Split.Num.Receiver.Observed > 8), "MEGA"))]
 
-
 ############################################## MANUAL INSPECTION ############################################## 
 
   # to filter out by the number of targets and only keep polymoprhic call-sites
+data[ , "N.Calls" := uniqueN(.SD) , by = list(Source.Section, Symbol, Observed.Receiver)]
 data_plot <- data[TP.Lookup.Status != "MONO"]
-data_plot[ , "N.Calls" := uniqueN(.SD) , by = list(Source.Section, Symbol, Observed.Receiver)]
 setorderv(data_plot, c("N.Calls"), order=-1L)
 
 table_optimizable <- unique(data_plot, by = c("Source.Section", "Symbol") )
@@ -84,8 +83,8 @@ if (nrow(table_optimizable) != 0) {
 
 ############################################## PLOT GENERATION - LIFETIME ##############################################
 
-data_split <- data[Times.Splitted > 0 & TP.Lookup.Status == "POLY"]
-setorderv(data_split, c("Times.Splitted"), order=-1L)
+data_split <- data[Times.Splitted > 0 ]
+setorderv(data_split, c("N.Calls", "Times.Splitted"), order=-1L)
 
 data_split <- data_split[ , .(Observed.Receiver = list(Observed.Receiver), Call.ID), by = list(Source.Section, Symbol, CT.Address)]
 data_split <- data_split[ , "Signature" := lapply(.SD[[1]], unique), .SDcols = c("Observed.Receiver")] 
@@ -98,7 +97,7 @@ table_optimizable_split[, Rank := 1:.N]
 # this generates a faceted plot, each facet being the target adress(es), for a couple {Source.Section, symbol}
 split_lifetime <- function(ss, symb) {
   filtered_data <- data_split[Source.Section == ss & Symbol == symb]
-  p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=as.character(CT.Address), color=Signature[[1]])) + geom_point(size = 0.5, alpha = 0.4) 
+  p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=as.character(CT.Address), color=as.character(Signature))) + geom_point(size = 0.5, alpha = 0.4) 
   p <- p + xlab("Call ID") + ylab("Target") + ggtitle(paste("Split targets lifetime for Selector: ",filtered_data$Symbol, ", in source: ", filtered_data$Source.Section))
   p <- p + theme(text = element_text(size=10)) 
   p <- p + theme(
