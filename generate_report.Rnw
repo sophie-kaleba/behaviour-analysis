@@ -175,6 +175,8 @@ table_four_max <- table_before_aux %>%
   select(Benchmark, Max.Target, TP_Max.Target, SPLIT_Max.Target)
 #  filter(Max.Target > 1) don't summarize just yet, summarize when generating the latex table
 
+table_after_tp_details <- load_all_tables(folder_details, patt="tp")
+table_after_split_details <- load_all_tables(folder_details, patt="splitting") 
 table_split_transitions <- load_all_tables(folder_status, patt="split")
 
 ############################################## LATEX FORMATTING ###############################################
@@ -191,6 +193,10 @@ table_three_calls_latex <- kableExtra::kable(table_three_aftersplit %>% select(-
 table_four_latex <- kableExtra::kable(table_four_max, booktabs = TRUE, align = "r")
 
 table_split_transitions_latex <- kableExtra::kable(table_split_transitions, booktabs = TRUE, align = "r")
+
+table_after_tp_details_latex <- kableExtra::kable(table_after_tp_details, booktabs = TRUE, align = "r")
+
+table_after_split_details_latex <- kableExtra::kable(table_after_split_details, booktabs = TRUE, align = "r")
 
 ############################################## LATEX MACROS GENERATION ##############################################
 
@@ -234,5 +240,17 @@ print(table_four_latex)
 \def\SplittingTransitions{%
 <<SplittingTransitions, echo=FALSE, results='asis'>>=
 print(table_split_transitions_latex)
+  @
+  }%
+  
+\def\PolyAfterTP{%
+<<PolyAfterTP, echo=FALSE, results='asis'>>=
+print(table_after_tp_details_latex)
+  @
+  }%
+  
+\def\PolyAfterSplitting{%
+<<PolyAfterSplitting, echo=FALSE, results='asis'>>=
+print(table_after_split_details_latex)
   @
   }%
