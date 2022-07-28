@@ -5,5 +5,6 @@ args    <- commandArgs(trailingOnly = TRUE)
 folder_status = args[3]
 folder_cov = args[4]
 folder_report = args[5]
+folder_details = args[6]
 
 silence <- knit(args[1], args[2]);
