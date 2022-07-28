@@ -69,6 +69,8 @@ Each column represents the size of the biggest lookup cache, respectively before
 
 \subsection{Impact of eliminating target duplication}
 
+Appendix \ref{aftertp} lists the remaining polymorphic call-sites after this optimisation has been applied
+
 \subsubsection{\textbf{Impact on calls}}
 
 Amount of monomorphic, polymorphic and megamorphic calls before eliminating target duplication.
@@ -93,6 +95,7 @@ Change. represents the change (in \%) of the number of call-sites per category, 
 
 \subsection{Impact of splitting}
 After having eliminated target duplication
+Appendix \ref{aftersplitting} lists the remaining polymorphic call-sites after this optimisation has been applied
 
 \subsubsection{\textbf{Impact on calls}}
 
@@ -107,23 +110,55 @@ Change. represents the change (in \%) of the number of calls per category, after
 
 \subsubsection{\textbf{Impact on call sites}}
 
-Amount of monomorphic, polymorphic and megamorphic call-sites before splitting, but after having eliminated target duplicates.
+Table \ref{after_split_call_site} represents the amount of monomorphic, polymorphic and megamorphic call-sites before splitting, but after having eliminated target duplicates.
 Change. represents the change (in \%) of the number of call-sites per category, after applying splitting.
 
 \begin{table}[h!]
 	\centering
 	\BeforeAfterSplitSites
 	\caption{Splitting: impact on call-sites}
+	\label{after_split_call_site}
 \end{table}
 
 \section{Detailed summary of splitting behaviour}
 
-This table displays the different splitting transitions that occurred. They mention the state of the lookup cache before and after splitting. The number corresponds to the number of splits.
+Table \ref{transitions} displays the different splitting transitions that occurred. They mention the state of the lookup cache before and after splitting. The number corresponds to the number of splits.
 
 \begin{table}[h!]
 	\centering
 	\SplittingTransitions
 	\caption{The different splitting transitions}
+	\label{transitions}
+\end{table}
+
+
+\clearpage
+\appendix
+\section{After eliminating target duplicates: focus on the remaining polymorphic call-sites}
+\label{aftertp}
+
+This table lists the remaining polymorphic call-sites, after eliminating target duplicates
+
+\begin{table}[h!]
+	\centering
+	\resizebox{\linewidth}{!}{
+	\PolyAfterTP
+	}
+	\caption{List of polymorphic call-sites after eliminating target duplicates}
+\end{table}
+
+
+\section{After splitting: focus on the remaining polymorphic call-sites}
+\label{aftersplitting}
+
+This table lists the remaining polymorphic call-sites, after splitting
+
+\begin{table}[h!]
+	\centering
+	\resizebox{\linewidth}{!}{
+	\PolyAfterSplitting
+	}
+	\caption{List of polymorphic call-sites after splitting}
 \end{table}
 
 \end{document}
