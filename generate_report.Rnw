@@ -35,7 +35,6 @@ source("./scripts/libraries.R", chdir=TRUE)
 
 # Table D
 # solely table transition summary
-
 load_all_tables <- function (folder, head = TRUE, patt="") { 
   result <- NULL
   files <- sort(list.files(folder, pattern=patt))
@@ -45,7 +44,8 @@ load_all_tables <- function (folder, head = TRUE, patt="") {
       data <- read.csv(file.path(folder, f), sep=" ", strip.white = TRUE, header=head, check.names = FALSE) #check-names so no weird formatting happens
       result <- bind_rows(result, data)
   }
-  result$Benchmark <- revalue(result$Benchmark, 
+  if (nrow(result) != 0) {  
+    result$Benchmark <- revalue(result$Benchmark, 
                       c("AsciidoctorConvertSmall"  = "ADConvert",
                       "AsciidoctorLoadFileSmall" = "ADLoadFile",        
                       "BlogRailsRoutesTwoRoutesTwoRequests" = "BlogRails",             
@@ -54,7 +54,7 @@ load_all_tables <- function (folder, head = TRUE, patt="") {
                       "ImageDemoConv" = "ImgDemoConv",
                       "ImageDemoSobel" = "ImgDemoSobel",                 
                       "LeeBench" = "Lee",       
-                      "SinatraHello" = "Sinatra"))
+                      "SinatraHello" = "Sinatra"))}
   return(result)
 }
 
