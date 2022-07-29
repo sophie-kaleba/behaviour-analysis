@@ -5,9 +5,9 @@ benchmark_name = args[1]
 folder_out = args[2]
 filename = args[3]
 
-# benchmark_name = "BlogRails"
+# benchmark_name = "DeltaBlue"
 # folder_out = "../results/latest"
-# filename = "../results/latest/parsed_BlogRailsRoutesTwoRoutesTwoRequests.log"
+# filename = "../results/latest/parsed_DeltaBlue.log"
 
 col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver")
 data <- fread(filename, header = FALSE, sep="\t", col.names = col_names)
@@ -15,6 +15,9 @@ data$Benchmark <- benchmark_name
 
 data <- data[!(`Builtin?` %like% "PROC|LAMBDA|block")]
 data <- data[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim)]
+
+first_user <- head(data[Stage == "MAIN"], 1)
+first_user <- first_user$Call.ID
 
 gc()
 
@@ -60,7 +63,8 @@ plot_calls <- function(ss, symb) {
   split_callSite <- strsplit(ss, "/", fixed=TRUE)
   p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, shape=Observed.Receiver, size=Observed.Receiver)) + geom_point(size = 2, alpha = 0.4) 
   p <- p + xlab("Call ID") + ylab("Target")  + ggtitle(paste(filtered_data$Symbol, ", in ", tail(split_callSite[[1]], 1)))
-    p <- p  + theme_bw() + theme(legend.position = "none")+ theme(text = element_text(size=40))
+  p <- p  + theme_bw() + theme(legend.position = "none")+ theme(text = element_text(size=40))
+  p <- p + geom_vline(xintercept = as.numeric(as.character(first_user)))
  return (p)
 }
 
@@ -106,13 +110,14 @@ split_lifetime <- function(ss, symb) {
   p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=CT.Address_ord, color=as.character(Signature))) + geom_point(size = 0.5, alpha = 0.4) 
   p <- p + xlab("Call ID") + ylab("Target") + ggtitle(paste("Split targets lifetime for Selector: ",filtered_data$Symbol, ", in source: ", filtered_data$Source.Section))
   p <- p + theme(text = element_text(size=10)) 
-  p <- p + theme(
+  p <- p + theme_bw() + theme(
     legend.position = c(.95, .95),
     legend.justification = c("right", "top"),
     legend.box.just = "right",
     legend.margin = margin(6, 6, 6, 6)
   )
   p <- p + labs(color = "Target type")
+  p <- p + geom_vline(xintercept = as.numeric(as.character(first_user)))
   return (p)
 }
 
