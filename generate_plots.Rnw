@@ -61,7 +61,7 @@ table_optimizable[, Rank := 1:.N]
 plot_calls <- function(ss, symb) {
   filtered_data <- data %>% filter(Source.Section == ss & Symbol == symb)
   split_callSite <- strsplit(ss, "/", fixed=TRUE)
-  p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, shape=Observed.Receiver, size=Observed.Receiver)) + geom_point(size = 2, alpha = 0.4) 
+  p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, color=Observed.Receiver)) + geom_point(size = 2, alpha = 0.4) 
   p <- p + xlab("Call ID") + ylab("Target")  + ggtitle(paste(filtered_data$Symbol, ", in ", tail(split_callSite[[1]], 1)))
   p <- p  + theme_bw() + theme(legend.position = "none")+ theme(text = element_text(size=40))
   p <- p + geom_vline(xintercept = as.numeric(as.character(first_user)))
@@ -92,9 +92,8 @@ dir.create(split_lifetime_folder)
 data_split <- data[Times.Splitted > 0 ]
 setorderv(data_split, c("N.Calls", "Times.Splitted"), order=-1L)
 
-data_split <- data_split[ , .(Observed.Receiver = list(Observed.Receiver), Call.ID), by = list(Source.Section, Symbol, CT.Address)]
-data_split <- data_split[ , "Signature" := lapply(.SD[[1]], unique), .SDcols = c("Observed.Receiver")] 
-data_split[, Observed.Receiver := NULL]
+data_split <- data_split[ , .(Observed.Receiver = list(unique(Observed.Receiver)), Call.ID), by = list(Source.Section, Symbol, CT.Address)]
+setnames(data_split, "Observed.Receiver", "Signature") 
 
 table_optimizable_split <- unique(data_split, by = c("Source.Section", "Symbol") )
 table_optimizable_split[, Rank := 1:.N]
