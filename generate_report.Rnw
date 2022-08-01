@@ -194,13 +194,13 @@ table_four_latex <- kableExtra::kable(table_four_max, booktabs = TRUE, align = "
 
 table_split_transitions_latex <- kableExtra::kable(table_split_transitions, booktabs = TRUE, align = "r")
 
-table_after_tp_details_latex <- kableExtra::kable(table_after_tp_details, booktabs = TRUE, align = "r")
+table_after_tp_details_latex <- kableExtra::kable(table_after_tp_details %>% select(-Benchmark), booktabs = TRUE, align = "r")
 
-table_after_split_details_latex <- kableExtra::kable(table_after_split_details, booktabs = TRUE, align = "r")
+table_after_split_details_latex <- kableExtra::kable(table_after_split_details %>% select(-Benchmark), booktabs = TRUE, align = "r")
 
 ############################################## LATEX MACROS GENERATION ##############################################
-
 @
+
 \def\GeneralMetrics{%
 <<GeneralMetrics, echo=FALSE, results='asis'>>=
 print(table_one_latex)
