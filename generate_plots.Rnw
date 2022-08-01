@@ -5,6 +5,9 @@ benchmark_name = args[1]
 folder_out = args[2]
 filename = args[3]
 
+keep_startup = as.logical(args[4])
+keep_blocks = as.logical(args[5])
+
 # benchmark_name = "DeltaBlue"
 # folder_out = "../results/latest"
 # filename = "../results/latest/parsed_DeltaBlue.log"
@@ -13,7 +16,16 @@ col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.Add
 data <- fread(filename, header = FALSE, sep="\t", col.names = col_names)
 data$Benchmark <- benchmark_name
 
-data <- data[!(`Builtin?` %like% "PROC|LAMBDA|block")]
+if (!keep_startup) {
+  data <- data[!(`Stage` %like% "STARTUP")] #remove startup data
+}
+
+if(!keep_blocks) {
+  data <- data[!(`Builtin?` %like% "PROC|LAMBDA|block")] #remove block data
+} else {
+  data <- data[`Builtin?` %like% "PROC|LAMBDA|block"]
+}
+
 data <- data[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim)]
 
 first_user <- head(data[Stage == "MAIN"], 1)
@@ -87,7 +99,9 @@ if (nrow(table_optimizable) != 0) {
 
 ############################################## PLOT GENERATION - LIFETIME ##############################################
 split_lifetime_folder = file.path(folder_out, "split_lifetime")
-dir.create(split_lifetime_folder)
+if (!dir.exists(split_lifetime_folder)) {
+  dir.create(split_lifetime_folder)
+}
 
 data_split <- data[Times.Splitted > 0 ]
 setorderv(data_split, c("N.Calls", "Times.Splitted"), order=-1L)
