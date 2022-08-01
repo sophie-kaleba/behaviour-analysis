@@ -2,20 +2,33 @@ source("./scripts/libraries.R", chdir=TRUE)
 
 args = commandArgs(trailingOnly=TRUE)
 benchmark_name = args[1]
-folder_out = args[2]
-filename = args[3]
+filename = args[2]
+
+folder_out = args[3]
+keep_startup = as.logical(args[4])
+keep_blocks = as.logical(args[5])
 
 # benchmark_name = "DeltaBlue"
-# folder_out = "../results/26-07-22_08-11-19/DeltaBlue/"
-# filename = "../results/26-07-22_08-11-19/DeltaBlue/parsed_DeltaBlue.log"
+# folder_out = "../results/29-07-22_16-06-33/DeltaBlue/"
+# filename = "../results/29-07-22_16-06-33/DeltaBlue/parsed_DeltaBlue.log"
+# keep_startup = TRUE
+# keep_blocks = FALSE
 
-# col_names <- c("Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver")
 col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver")
 data <- fread(filename, header = FALSE, sep="\t", col.names = col_names)
 benchmark_name <- str_match(filename, "parsed\\_(.*?)\\.log")[2]
 data$Benchmark <- benchmark_name
 
-data <- data[!(`Builtin?` %like% "PROC|LAMBDA|block")]
+if (!keep_startup) {
+  data <- data[!(`Stage` %like% "STARTUP")] #remove startup data
+}
+
+if(!keep_blocks) {
+  data <- data[!(`Builtin?` %like% "PROC|LAMBDA|block")] #remove block data
+} else {
+  data <- data[`Builtin?` %like% "PROC|LAMBDA|block"]
+}
+
 data <- data[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim)]
 
 gc()
@@ -156,6 +169,19 @@ table_two_spliting <- dt_generate_table_two(data, Original.Receiver, Observed.Re
 ############################################## SAVE AS CSV ###############################################
 dt_write_on_disk <- function(dt, name, path = "") {
   fwrite(dt, file.path(path,paste(benchmark_name,"-",name,".csv",sep="")), col.names = TRUE, row.names = FALSE, sep=" ")
+}
+
+if (keep_blocks) {
+  folder_out <- file.path(folder_out,"Blocks")
+  if (!dir.exists(file.path(folder_out))) {dir.create(folder_out, recursive = TRUE)}
+} else {
+  folder_out <- file.path(folder_out,"Methods")
+  if (!dir.exists(file.path(folder_out))) {dir.create(folder_out, recursive = TRUE)}
+}
+
+if (!keep_startup) {
+  folder_out <- file.path(folder_out,"NoStartup")
+  if (!dir.exists(file.path(folder_out))) {dir.create(folder_out, recursive = TRUE)}
 }
 
 if (!dir.exists(file.path(folder_out,"General")) & !dir.exists(file.path(folder_out,"Details"))) {
