@@ -149,7 +149,7 @@ table_three_aftersplit <- table_before_aux %>%
 # This table displays to which extent the optimizations impacted polymorphism, this is new from the article
 table_four_max <- table_before_aux %>%
   merge(table_split_aux) %>%
-  select(Benchmark, Max.Target, TP_Max.Target, SPLIT_Max.Target)
+  select(Benchmark, Max.Target, SPLIT_Max.Target)
 #  filter(Max.Target > 1) don't summarize just yet, summarize when generating the latex table
 
 table_after_split_details <- load_all_tables(folder_details, patt="splitting") 
@@ -158,9 +158,9 @@ table_split_transitions <- load_all_tables(folder_status, patt="split")
 ############################################## LATEX FORMATTING ###############################################
 table_one_latex <- kableExtra::kable(table_one, booktabs = TRUE, align = "r")
 
-table_three_sites_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Calls"), -contains("SPLIT")), booktabs = TRUE, align = "r")
+table_three_sites_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -contains("Calls"), -contains("SPLIT")), booktabs = TRUE, align = "r")
 
-table_three_calls_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Sites"), -contains("SPLIT")), booktabs = TRUE, align = "r")
+table_three_calls_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -contains("Sites"), -contains("SPLIT")), booktabs = TRUE, align = "r")
 
 table_four_latex <- kableExtra::kable(table_four_max, booktabs = TRUE, align = "r")
 
