@@ -24,6 +24,7 @@ if(!keep_blocks) {
   data <- data[!(`Builtin?` %like% "PROC|LAMBDA|block")] #remove block data
 } else {
   data <- data[`Builtin?` %like% "PROC|LAMBDA|block"]
+  stop("You should use BLOCK_generate_plots.Rnw instead")
 }
 
 data <- data[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim)]
