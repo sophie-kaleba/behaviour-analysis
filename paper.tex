@@ -52,7 +52,20 @@
 \let\NoStartupSplittingTransitions\SplittingTransitions
 \let\NoStartupPolyAfterTP\PolyAfterTP
 \let\NoStartupPolyAfterSplitting\PolyAfterSplitting
-
+\input{withstartup_block_tables}
+\let\StartuplocksGeneralMetrics\BlocksGeneralMetrics
+\let\StartupBlocksBeforeAfterSplitCalls\BlocksBeforeAfterSplitCalls
+\let\StartupBlocksBeforeAfterSplitSites\BlocksBeforeAfterSplitSites
+\let\StartupBlocksExtent\BlocksExtent
+\let\StartupBlocksSplittingTransitions\BlocksSplittingTransitions
+\let\StartupBlocksPolyAfterSplitting\BlocksPolyAfterSplitting
+\input{block_tables}
+\let\NoStartupBlocksGeneralMetrics\BlocksGeneralMetrics
+\let\NoStartupBlocksBeforeAfterSplitCalls\BlocksBeforeAfterSplitCalls
+\let\NoStartupBlocksBeforeAfterSplitSites\BlocksBeforeAfterSplitSites
+\let\NoStartupBlocksExtent\BlocksExtent
+\let\NoStartupBlocksSplittingTransitions\BlocksSplittingTransitions
+\let\NoStartupBlocksPolyAfterSplitting\BlocksPolyAfterSplitting
 
 \begin{document}
 
@@ -205,27 +218,125 @@ Change. represents the change (in \%) of the number of calls per category, after
 
 \subsubsection{\textbf{Impact on call sites}}
 
-Table \ref{after_split_call_site} represents the amount of monomorphic, polymorphic and megamorphic call-sites before splitting, but after having eliminated target duplicates.
+Table \ref{no_st_after_split_call_site} represents the amount of monomorphic, polymorphic and megamorphic call-sites before splitting, but after having eliminated target duplicates.
 Change. represents the change (in \%) of the number of call-sites per category, after applying splitting.
 
 \begin{table}[h!]
 	\centering
 	\NoStartupBeforeAfterSplitSites
 	\caption{[Startup discarded] Splitting: impact on call-sites}
-	\label{after_split_call_site}
+	\label{no_st_after_split_call_site}
 \end{table}
 
 \section{Detailed summary of splitting behaviour}
 
-Table \ref{transitions} displays the different splitting transitions that occurred. They mention the state of the lookup cache before and after splitting. The number corresponds to the number of splits.
+Table \ref{no_st_transitions} displays the different splitting transitions that occurred. They mention the state of the lookup cache before and after splitting. The number corresponds to the number of splits.
 
 \begin{table}[h!]
 	\centering
 	\NoStartupSplittingTransitions
 	\caption{[Startup discarded] The different splitting transitions}
-	\label{transitions}
+	\label{no_st_transitions}
 \end{table}
 
+\section{FOCUSING ON BLOCKS}
+
+\section{Call-site behaviour}
+
+This table shows the impact of call-site optimisations on the size of the biggest lookup cache.
+Each column represents the size of the biggest lookup cache, respectively before any optimisation and after applying splitting ("SPLIT").
+
+\begin{table}[h!]
+	\centering
+	\StartupBlocksExtent
+	\caption{[Blocks] Impact of call-site optimisations on the maximum number of different targets in cache}
+\end{table}
+
+\subsection{Impact of splitting}
+
+\subsubsection{\textbf{Impact on calls}}
+
+Amount of monomorphic, polymorphic and megamorphic calls before splitting, but after having eliminated target duplicates.
+Change. represents the change (in \%) of the number of calls per category, after applying splitting.
+
+\begin{table}[h!]
+	\centering	
+	\StartupBlocksBeforeAfterSplitCalls
+	\caption{[Blocks] Splitting: impact on calls}
+\end{table}
+
+\subsubsection{\textbf{Impact on call sites}}
+
+Table \ref{blocks_after_split_call_site} represents the amount of monomorphic, polymorphic and megamorphic call-sites before splitting, but after having eliminated target duplicates.
+Change. represents the change (in \%) of the number of call-sites per category, after applying splitting.
+
+\begin{table}[h!]
+	\centering
+	\StartupBlocksBeforeAfterSplitSites
+	\caption{[Blocks] Splitting: impact on call-sites}
+	\label{blocks_after_split_call_site}
+\end{table}
+
+\section{Detailed summary of splitting behaviour}
+
+Table \ref{blocks_transitions} displays the different splitting transitions that occurred. They mention the state of the lookup cache before and after splitting. The number corresponds to the number of splits.
+
+\begin{table}[h!]
+	\centering
+	\StartupBlocksSplittingTransitions
+	\caption{The different splitting transitions}
+	\label{blocks_transitions}
+\end{table}
+
+\section{Startup behaviour}
+Startup here is the part of execution time where user code is not yet loaded, and contains RubyContext initialisation, including the loading of Ruby core library. In this section, \textbf{we use the same tables as previously, but calls that have happened in the startup phase have been discarded from the data.}
+
+First, let's see how much this influences the degree of polymorphism.
+
+\begin{table}[h!]
+	\centering
+	\NoStartupBlocksExtent
+	\caption{[Blocks - Startup discarded] Impact of call-site optimisations on the maximum number of different targets in cache}
+\end{table}
+
+
+\subsection{Impact of splitting}
+After having eliminated target duplication
+Appendix \ref{aftersplitting} lists the remaining polymorphic call-sites after this optimisation has been applied
+
+\subsubsection{\textbf{Impact on calls}}
+
+Amount of monomorphic, polymorphic and megamorphic calls before splitting, but after having eliminated target duplicates.
+Change. represents the change (in \%) of the number of calls per category, after applying splitting.
+
+\begin{table}[h!]
+	\centering	
+	\NoStartupBlocksBeforeAfterSplitCalls
+	\caption{[Blocks - Startup discarded] Splitting: impact on calls}
+\end{table}
+
+\subsubsection{\textbf{Impact on call sites}}
+
+Table \ref{blocks_no_st_after_split_call_site} represents the amount of monomorphic, polymorphic and megamorphic call-sites before splitting, but after having eliminated target duplicates.
+Change. represents the change (in \%) of the number of call-sites per category, after applying splitting.
+
+\begin{table}[h!]
+	\centering
+	\NoStartupBlocksBeforeAfterSplitSites
+	\caption{[Blocks - Startup discarded] Splitting: impact on call-sites}
+	\label{blocks_no_st_after_split_call_site}
+\end{table}
+
+\section{Detailed summary of splitting behaviour}
+
+Table \ref{blocks_no_st_transitions} displays the different splitting transitions that occurred. They mention the state of the lookup cache before and after splitting. The number corresponds to the number of splits.
+
+\begin{table}[h!]
+	\centering
+	\NoStartupBlocksSplittingTransitions
+	\caption{[Startup discarded] The different splitting transitions}
+	\label{blocks_no_st_transitions}
+\end{table}
 
 \clearpage
 \appendix
