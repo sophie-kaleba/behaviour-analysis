@@ -63,6 +63,9 @@ table_optimizable <- unique(data_plot, by = c("Source.Section", "Symbol") )
 table_optimizable[, Rank := 1:.N]
 
 ############################################## PLOT GENERATION - FACET ##############################################
+if (!dir.exists(folder_out)) {
+  dir.create(folder_out)
+}
 
 # this generates a faceted plot, each facet being the target adress(es), for a couple {Source.Section, symbol}
 plot_calls <- function(ss, symb) {
