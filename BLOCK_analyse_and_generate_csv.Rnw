@@ -46,9 +46,10 @@ data[ , "Times.Splitted" := (n_distinct(CT.Address) - 1), by=list(Source.Section
 ############################################## SPLITTING ############################################## 
 split_table <- copy(data)
 
-split_table <- split_table[ , .(Start.Time = first(Call.ID),
-                    End.Time = last(Call.ID),
-                    Observed.Receiver), by = list(Benchmark, Source.Section, Symbol, CT.Address) ]
+split_table[ , `:=`(Start.Time = first(Call.ID),
+                    End.Time = last(Call.ID)), by = list(Benchmark, Source.Section, Symbol, CT.Address) ]
+split_table[, c("Builtin?", "Before.Num.Targets", "Split.Num.Targets", "Times.Splitted", "Stage", "Original.Receiver", "Call.ID") := NULL]
+setcolorder(split_table, c("Benchmark", "Source.Section", "Symbol", "CT.Address", "Start.Time", "End.Time", "Observed.Receiver"))
 split_table <- unique(split_table)
 setorderv(split_table, c("Benchmark", "Source.Section", "Symbol", "CT.Address", "Start.Time"))
 

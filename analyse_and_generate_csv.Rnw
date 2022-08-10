@@ -8,10 +8,10 @@ folder_out = args[3]
 keep_startup = as.logical(args[4])
 keep_blocks = as.logical(args[5])
 
-# benchmark_name = "DeltaBlue"
-# folder_out = "../results/29-07-22_16-06-33/DeltaBlue/"
-# filename = "../results/29-07-22_16-06-33/DeltaBlue/parsed_DeltaBlue.log"
-# keep_startup = TRUE
+# benchmark_name = "BlogRailsRoutesTwoRoutesTwoRequests"
+# folder_out = "/home/sopi/Documents/Side_projects/ruby-cs-analyser/results/latest"
+# filename = "/home/sopi/Documents/Side_projects/ruby-cs-analyser/results/latest/parsed_BlogRailsRoutesTwoRoutesTwoRequests.log"
+# keep_startup = FALSE
 # keep_blocks = FALSE
 
 col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver")
@@ -44,23 +44,26 @@ setnames(data,"Num.Receiver.Observed", "TP.Num.Targets")
 data[ , "Split.Num.Targets" := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, CT.Address, Benchmark)]
 data[ , "Times.Splitted" := (n_distinct(CT.Address) - 1), by=list(Source.Section, Symbol)]
 
+gc()
+
 ############################################## SPLITTING ############################################## 
 split_table <- copy(data)
 #split_table[ , "Num.Calls.Target" := n_distinct(Call.ID), by=list(Source.Section, Symbol, Benchmark)] don't think we actually use it
 
-split_table <- split_table[ , .(Start.Time = first(Call.ID),
-                    End.Time = last(Call.ID),
-                    Observed.Receiver), by = list(Benchmark, Source.Section, Symbol, CT.Address) ]
+split_table[ , `:=`(Start.Time = first(Call.ID),
+                    End.Time = last(Call.ID)), by = list(Benchmark, Source.Section, Symbol, CT.Address) ]
+split_table[, c("Builtin?", "TP.Num.Targets", "Before.Num.Targets", "Split.Num.Targets", "Times.Splitted", "Stage", "Original.Receiver", "Call.ID") := NULL]
+setcolorder(split_table, c("Benchmark", "Source.Section", "Symbol", "CT.Address", "Start.Time", "End.Time", "Observed.Receiver"))
 split_table <- unique(split_table)
 setorderv(split_table, c("Benchmark", "Source.Section", "Symbol", "CT.Address", "Start.Time"))
-
-gc()
 
 # and export it as a csv file so our java program can analyse it
 split_file <-  file.path(folder_out, paste(benchmark_name,"_splitting_data.csv", sep=""))
 out_split_file <- file.path(folder_out, paste("out_",benchmark_name,"_splitting_data.csv", sep=""))      
 fwrite(split_table, split_file, row.names = FALSE)
 split_table <- NULL
+
+gc()
 
 # call the java program to analyze the data, and then fetch back the results
 prev_wd <- getwd()
