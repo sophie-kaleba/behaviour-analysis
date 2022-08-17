@@ -1,51 +1,18 @@
-%!TEX root = paper.tex
-<<knitr-load, echo=FALSE, include=FALSE>>=
-if (Sys.getenv("RSTUDIO") == "1") {
-    setwd("/home/sopi/Documents/Side_projects/behaviour-analysis/")
-} else {
-   opts_chunk$set(
-    fig.path="./figure/",
-    fig.keep='all',
-    dev=c('tikz'), #dev='pdf',c('tikz', 'svg'),
-    dev.args=list(pointsize=8, timestamp = FALSE),
-    echo=FALSE,
-    external=FALSE,
-    tidy=FALSE)
-
-  ## Make sure that TikZDevice is used for measuring size of latex labels
-  options(device = function(...) tikzDevice::tikz(tempfile(), ...))
-}
-
 source("./scripts/libraries.R", chdir=TRUE)
 
-folder_status <- "./results/07-06-22_16-08-09/results/Status"
-folder_cov <- "./cov_folder/reports/parsed_reports/global"
+folder_status <- "../results/11-08-22_18-49-42/"
 
-############################################ LATEX TABLES #########################################
-# Table A
-# Merges the coverage values (LOC, LOC cov, Fn, Fn cov) + Num max of receivers, Num of polymoprhic call-sites, Num of call-sites
-
-# Table B
-# For calls
-# will merge values from table_one_original and table_one_tp
-# which is needed:
-# - read from all the tables
-# - merge all the individual tables together
-
-# Table C
-# For calls
-# will merge values from table_one_tp and table_one_splitting, also need the table_transition_summary one
-
-# Table D
-# solely table transition summary
-
-load_all_tables <- function (folder, head = TRUE, patt="") { 
+load_all_tables <- function (folder, head = TRUE, folder_pattern="" ,patt="") { 
   result <- NULL
-  files <- sort(list.files(folder, pattern=patt))
+  
+  dir <- list.dirs(folder)
+  dir <- dir[ str_detect(dir, folder_pattern)]
+  
+  files <- sort(list.files(dir, pattern=patt, full.names = T))
   
   for (f in files) {
       options(warn=-1) # to ignore the incomplete final line warning
-      data <- read.csv(file.path(folder, f), sep=" ", strip.white = TRUE, header=head, check.names = FALSE) #check-names so no weird formatting happens
+      data <- read.csv(f, sep=" ", strip.white = TRUE, header=head, check.names = FALSE) #check-names so no weird formatting happens
       result <- bind_rows(result, data)
   }
   result$Benchmark <- revalue(result$Benchmark, 
@@ -61,8 +28,8 @@ load_all_tables <- function (folder, head = TRUE, patt="") {
   return(result)
 }
 
-coverage_data <- load_all_tables(folder_cov,FALSE) 
-colnames(coverage_data) <- c("Benchmark", "LOC", "LOC.Cov", "Num.Fn", "Fn.Cov")
+coverage_data <- load_all_tables(folder_status, FALSE, folder_pattern="Coverage/Global") 
+colnames(coverage_data) <- c("Benchmark", "Num.LOC", "LOC.Cov", "Num.Fn", "Fn.Cov")
 coverage_data$Benchmark <- revalue(coverage_data$Benchmark, 
                       c("AsciidoctorConvertSmall"  = "ADConvert",
                       "AsciidoctorLoadFileSmall" = "ADLoadFile",        
@@ -74,268 +41,134 @@ coverage_data$Benchmark <- revalue(coverage_data$Benchmark,
                       "LeeBench" = "Lee",       
                       "SinatraHello" = "Sinatra"))
 
-before_optim <- load_all_tables(folder_status, patt="before") %>% replace(is.na(.), 0)
-before_optim <- before_optim[,gtools::mixedsort(names(before_optim))] %>% select("Benchmark", everything()) 
-before_optim <- join(coverage_data, before_optim)
 
-tp <- load_all_tables(folder_status, patt="tp") %>% replace(is.na(.), 0)
-tp <- tp[,gtools::mixedsort(names(tp))] %>% select("Benchmark", everything()) 
+data <- load_all_tables(folder_status, folder_pattern = "Methods/General", patt="one") %>% replace(is.na(.), 0)
+data <- join(coverage_data, data) %>% select(c("Benchmark", "Times.Splitted"), everything())
+names(data) <- sub('(\\D+)(\\d+$)', '\\2_\\1', names(data))
 
-splitting <- load_all_tables(folder_status, patt="split") %>% replace(is.na(.), 0)
-splitting <- splitting[,gtools::mixedsort(names(splitting))] %>% select("Benchmark", everything()) 
+before <- data %>%
+  select(1:6, contains("Before"))
+names(before) <- sub('(\\d+)_([a-zA-Z]+).(\\D+)_', '\\1_\\3', names(before))
+before <- before[ , gtools::mixedsort(names(before))] %>% select(c("Benchmark", "Num.LOC", "LOC.Cov", "Num.Fn", "Fn.Cov", "Times.Splitted"), everything())
+
+tp <- data %>%
+  select(1:6, contains("TP"))
+names(tp) <- sub('(\\d+)_([a-zA-Z]+).(\\D+)_', '\\1_\\3', names(tp))
+tp <- tp[ , gtools::mixedsort(names(tp))] %>% select(c("Benchmark", "Num.LOC", "LOC.Cov", "Num.Fn", "Fn.Cov", "Times.Splitted"), everything())
+
+splitting <- data %>%
+  select(1:6, contains("Split"))
+names(splitting) <- sub('(\\d+)_([a-zA-Z]+).(\\D+)_', '\\1_\\3', names(splitting))
+splitting <- splitting[ , gtools::mixedsort(names(splitting))] %>% select(c("Benchmark", "Num.LOC", "LOC.Cov", "Num.Fn", "Fn.Cov", "Times.Splitted"), everything())
+
+############################################## UTILS ###############################################  
+apply_big_numbers <- function(df) {
+  df <-   df %>% 
+    dplyr::mutate(across(!Benchmark, as.numeric)) %>%
+    purrr::map_df(prettyNum ,big.interval = 3,  big.mark = ",")
+  return(df)
+}
+
+f0 = function(df) {
+  idx = ifelse((df == 0), 0L, col(df))
+  apply(idx, 1, max)
+}
 
 # From there, build Table 1
 # LOC, LOC covered, Fn, Fn covered, Max receivers, number of poly calls, number of poly call-sites
-f0 = function(df) {
-    idx = ifelse((df == 0), 0L, col(df))
-    apply(idx, 1, max)
-}
-
 sum_poly <- function(df) {
   df <- df %>% mutate(Max.Target = c(0, names(.))[f0(.) + 1])
   df$Max.Target <- sub("[^0-9]+", "", df$Max.Target)
-
+  
+  df$Mono.Calls <- rowSums(df[grep('^[1]_\\w+.\\w+s', names(df))])
+  df$Mono.Call.Sites <- rowSums(df[grep('^[1]_\\w+.\\w+.S', names(df))])
+  
   df$Poly.Calls <- rowSums(df[grep('^[2-8]_\\w+.\\w+s', names(df))])
   df$Poly.Call.Sites <- rowSums(df[grep('^[2-8]_\\w+.\\w+.S', names(df))])
-
+  
   df$Mega.Calls <- rowSums(df[grep('^([9]|[1-9][0-9])_\\w+.\\w+s', names(df))])
   df$Mega.Call.Sites <- rowSums(df[grep('^([9]|[1-9][0-9])_\\w+.\\w+.S', names(df))])
   
   return(df)
 }
 
-before_optim <- sum_poly(before_optim)
+############################################################################################# 
+before <- sum_poly(before)
 tp <- sum_poly(tp)
 splitting <- sum_poly(splitting)
 
 # Build the general metrics table
-table_one <- before_optim %>%
-  select(Benchmark, LOC, LOC.Cov, Num.Fn, Fn.Cov, Max.Target, Poly.Call.Sites, Poly.Calls, Mega.Call.Sites, Mega.Calls) %>%
-  mutate(Poly.Call.Sites = Poly.Call.Sites + Mega.Call.Sites, Poly.Calls = Mega.Calls + Poly.Calls, across(!Benchmark, as.numeric)) %>%
-  select (-Mega.Call.Sites, -Mega.Calls)
+table_one <- before %>%
+  select(Benchmark, Num.LOC, LOC.Cov, Num.Fn, Fn.Cov, Max.Target, Mono.Call.Sites, Mono.Calls, Poly.Call.Sites, Poly.Calls, Mega.Call.Sites, Mega.Calls) %>%
+  apply_big_numbers() #%>%
+#mutate("Poly+Mega.Call.Sites" = Poly.Call.Sites + Mega.Call.Sites, "Poly+Mega.Calls" = Mega.Calls + Poly.Calls, across(!Benchmark, as.numeric)) %>%
+#select (-Mega.Call.Sites, -Mega.Calls)
 
 # For table 2 and 3, we need to have 3 temporary tables, one before optim, one after tp, one after splitting
-table_before_aux <- before_optim %>%
-  select(Benchmark, `1_Num.Call.Sites`, `1_Num.Calls`, Poly.Calls, Poly.Call.Sites, Mega.Calls, Mega.Call.Sites, Max.Target) %>%
-  mutate(Poly.Call.Sites = Poly.Call.Sites + Mega.Call.Sites, Poly.Calls = Mega.Calls + Poly.Calls, across(!Benchmark, as.numeric)) %>%
-  select (-Mega.Call.Sites, -Mega.Calls)
+table_before_aux <- before %>%
+  select(Benchmark, Mono.Calls, Mono.Call.Sites, Poly.Calls, Poly.Call.Sites, Mega.Calls, Mega.Call.Sites, Max.Target) #%>%
+#mutate(Poly.Call.Sites = Poly.Call.Sites + Mega.Call.Sites, Poly.Calls = Mega.Calls + Poly.Calls, across(!Benchmark, as.numeric)) %>%
+#select (-Mega.Call.Sites, -Mega.Calls)
 
 table_tp_aux <- tp %>%
-  select(Benchmark, `1_Num.Call.Sites`, `1_Num.Calls`, Poly.Calls, Poly.Call.Sites, Mega.Calls, Mega.Call.Sites, Max.Target) %>%
-  mutate(Poly.Call.Sites = Poly.Call.Sites + Mega.Call.Sites, Poly.Calls = Mega.Calls + Poly.Calls, across(!Benchmark, as.numeric)) %>%
-  select (-Mega.Call.Sites, -Mega.Calls) %>%
+  select(Benchmark, Mono.Calls, Mono.Call.Sites, Poly.Calls, Poly.Call.Sites, Mega.Calls, Mega.Call.Sites, Max.Target) %>%
+  #mutate(Poly.Call.Sites = Poly.Call.Sites + Mega.Call.Sites, Poly.Calls = Mega.Calls + Poly.Calls, across(!Benchmark, as.numeric)) %>%
+  #select (-Mega.Call.Sites, -Mega.Calls) %>%
   rename_with( ~ paste0("TP_", .x), .cols = -Benchmark)
 
 table_split_aux <- splitting %>%
-  select(Benchmark, `1_Num.Call.Sites`, `1_Num.Calls`, Poly.Calls, Poly.Call.Sites, Mega.Calls, Mega.Call.Sites, Max.Target) %>%
-  mutate(Poly.Call.Sites = Poly.Call.Sites + Mega.Call.Sites, Poly.Calls = Mega.Calls + Poly.Calls, across(!Benchmark, as.numeric)) %>%
-  select (-Mega.Call.Sites, -Mega.Calls) %>%
-  rename_with( ~ paste0("SPLIT_", .x), .cols = -Benchmark)  
+  select(Benchmark, Mono.Calls, Mono.Call.Sites, Poly.Calls, Poly.Call.Sites, Mega.Calls, Mega.Call.Sites, Max.Target) %>%
+  #mutate(Poly.Call.Sites = Poly.Call.Sites + Mega.Call.Sites, Poly.Calls = Mega.Calls + Poly.Calls, across(!Benchmark, as.numeric)) %>%
+  #select (-Mega.Call.Sites, -Mega.Calls) %>%
+  rename_with( ~ paste0("SPLIT_", .x), .cols = -c("Benchmark"))  
 
 # from this table, we can extract Table2, for both calls and call-sites
-table_two_global <- table_before_aux %>%
+table_two_aftertp <- table_before_aux %>%
   merge(table_tp_aux) %>%
-#  filter(Poly.Call.Sites > 0) %>% don't summarize just yet, summarize when generating the latex table
-  mutate(Change.Mono.Sites = round((100 * (TP_1_Num.Call.Sites - `1_Num.Call.Sites`)/`1_Num.Call.Sites`), 1), 
-         Change.Mono.Calls = round((100 * (TP_1_Num.Calls - `1_Num.Calls`)/`1_Num.Calls`),1),
+  #  filter(Poly.Call.Sites > 0) %>% don't summarize just yet, summarize when generating the latex table
+  mutate(Change.Mono.Sites = round((100 * (TP_Mono.Call.Sites - `Mono.Call.Sites`)/`Mono.Call.Sites`), 1), 
+         Change.Mono.Calls = round((100 * (TP_Mono.Calls - `Mono.Calls`)/`Mono.Calls`),1),
          Change.Poly.Sites = round((100 * (TP_Poly.Call.Sites - Poly.Call.Sites)/Poly.Call.Sites), 1), 
-         Change.Poly.Calls = round((100 * (TP_Poly.Calls - Poly.Calls)/Poly.Calls), 1)) 
+         Change.Poly.Calls = round((100 * (TP_Poly.Calls - Poly.Calls)/Poly.Calls), 1),
+         Change.Mega.Sites = round((100 * (TP_Mega.Call.Sites - Mega.Call.Sites)/Mega.Call.Sites), 1), 
+         Change.Mega.Calls = round((100 * (TP_Mega.Calls - Mega.Calls)/Mega.Calls), 1))  %>%
+  apply_big_numbers()
 
 # from this table, we can extract Table3, for both calls and call-sites. Beware, we still need the number of times they have been split
-table_three_global <- table_tp_aux %>%
+table_three_aftersplit <- table_tp_aux %>%
   merge(table_split_aux) %>%
-#  filter(TP_Poly.Call.Sites > 0) %>% don't summarize just yet, summarize when generating the latex table
-  mutate(Change.Mono.Sites = round((100 * (SPLIT_1_Num.Call.Sites - `TP_1_Num.Call.Sites`)/`TP_1_Num.Call.Sites`), 1), 
-         Change.Mono.Calls = round((100 * (SPLIT_1_Num.Calls - `TP_1_Num.Calls`)/`TP_1_Num.Calls`),1),
+  #  filter(TP_Poly.Call.Sites > 0) %>% don't summarize just yet, summarize when generating the latex table
+  mutate(Change.Mono.Sites = round((100 * (SPLIT_Mono.Call.Sites - `TP_Mono.Call.Sites`)/`TP_Mono.Call.Sites`), 1), 
+         Change.Mono.Calls = round((100 * (SPLIT_Mono.Calls - `TP_Mono.Calls`)/`TP_Mono.Calls`),1),
          Change.Poly.Sites = round((100 * (SPLIT_Poly.Call.Sites - TP_Poly.Call.Sites)/TP_Poly.Call.Sites), 1), 
-         Change.Poly.Calls = round((100 * (SPLIT_Poly.Calls - TP_Poly.Calls)/TP_Poly.Calls), 1)) 
+         Change.Poly.Calls = round((100 * (SPLIT_Poly.Calls - TP_Poly.Calls)/TP_Poly.Calls), 1),
+         Change.Mega.Sites = round((100 * (SPLIT_Mega.Call.Sites - TP_Mega.Call.Sites)/TP_Mega.Call.Sites), 1), 
+         Change.Mega.Calls = round((100 * (SPLIT_Mega.Calls - TP_Mega.Calls)/TP_Mega.Calls), 1)) %>%
+  apply_big_numbers()
 
 # This table displays to which extent the optimizations impacted polymorphism, this is new from the article
-table_four_extent <- table_before_aux %>%
+table_four_max <- table_before_aux %>%
   merge(table_tp_aux) %>%
   merge(table_split_aux) %>%
   select(Benchmark, Max.Target, TP_Max.Target, SPLIT_Max.Target)
 #  filter(Max.Target > 1) don't summarize just yet, summarize when generating the latex table
 
+table_split_transitions <- load_all_tables(folder_status, folder_pattern ="Methods/General" , patt="split")
+
+table_four_max %>% mutate(across(!Benchmark, as.numeric)) %>% dplyr::arrange(desc(Max.Target)) %>% htmlTable
+table_split_transitions %>% mutate(across(!Benchmark, as.numeric)) %>% dplyr::arrange(desc(Times.Splitted)) %>% htmlTable 
+
 ############################################## LATEX FORMATTING ###############################################
-table_one_latex <- kableExtra::kable(df, booktabs = TRUE, label = label_text, align = "r", caption = caption_text) %>%
-  kableExtra::add_header_above(header_std) %>%
-  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
+table_one_latex <- kableExtra::kable(table_one, booktabs = TRUE, align = "r")
 
-############################################## LATEX FORMATTING ###############################################  
+table_two_sites_latex <- kableExtra::kable(table_two_aftertp %>% select(-Max.Target, -TP_Max.Target, -contains("Calls"), -contains("TP")), booktabs = TRUE, align = "r")
 
-############################################## UTILS ###############################################  
+table_two_calls_latex <- kableExtra::kable(table_two_aftertp %>% select(-Max.Target, -TP_Max.Target, -contains("Sites"), -contains("TP")), booktabs = TRUE, align = "r")
 
-# Here we'll collapse together: all the PSDUtil, PSDImage, PSDCompose and ChunkyColor
-combine_similar_benchmarks <- function(df, benchmark_prefix) {
-  table_mean <- df %>%
-      filter(str_detect(Benchmark, benchmark_prefix)) %>%
-      dplyr::mutate(across(!Benchmark, as.numeric)) %>%
-      dplyr::summarise(across(!Benchmark, mean)) %>%
-      dplyr::mutate_if(is.numeric, round, 1) %>%
-      as.data.frame()
-  row.names(table_mean) <- "Mean"
-  
-#  table_mean[1,]<-paste("≈", table_mean[1,], sep="")
-  
-  table_mean$Benchmark <- paste(benchmark_prefix,"*", sep="")
-  row.names(table_mean) <- NULL
-  
-  df <- df %>% 
-    filter(!str_detect(Benchmark, benchmark_prefix))
-    
-  df <- rbind(df, table_mean)
-  
-  return(df)
-}
+table_three_sites_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Calls"), -contains("SPLIT")), booktabs = TRUE, align = "r")
 
+table_three_calls_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Sites"), -contains("SPLIT")), booktabs = TRUE, align = "r")
 
-build_nice_latex_table_no_mega <- function(df, label_text = NULL, caption_text = "", header_std = c("", "MONO"=2, "POLY"=2)) {
-# trash the data BUT looks exactly how it should for the paper
-# see https://stackoverflow.com/questions/13984470/possible-to-create-latex-multicolumns-in-xtable/28420723#28420723
-names(df)[2] = names(df)[4] = "Before"
-names(df)[3] = names(df)[5] = "Change \n (in %)"
-# names(df)[4] = names(df)[7] = "Variation"
-beauty <- kableExtra::kable(df, booktabs = TRUE, linesep = "", label = label_text, align = "r", caption = caption_text) %>%
-  #kableExtra::row_spec(nrow(df), bold = TRUE, background = "#AFAFAF") %>%
-  kableExtra::add_header_above(header_std) %>%
-  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
-return(beauty)
-}
+table_four_latex <- kableExtra::kable(table_four_max, booktabs = TRUE, align = "r")
 
-switch_last_two <- function(df) {
-  last <- df[nrow(df),]
-  second_last <- df[nrow(df) -1,]
-  df[nrow(df),] <- second_last
-  df[nrow(df) -1,] <- last
-  return(df)
-}
-
-apply_big_numbers <- function(df) {
-   df <-   df %>% 
-      dplyr::mutate(across(!Benchmark, as.numeric)) %>%
-      purrr::map_df(prettyNum ,big.interval = 3,  big.mark = ",")
-   return(df)
-}
-
-
-
-############################################## MERGED TABLES ############################################### 
-
-data_split_transitions <- load_all_tables(folder_out, "Split", "Transitions", TRUE)
-data_split_transitions <- data_split_transitions %>% dplyr::arrange(Transition) %>% rename(Benchmark = Transition)  %>% select(-contains("..."))
-data_split_transitions_sum <- data_split_transitions %>% mutate(Times.Split = rowSums(across(where(is.numeric))))
-
-# Need to merge together the benchmarks with the same behavior
-#table_data_tp_calls <- add_total_row(table_data_tp_calls)
-table_data_tp_calls <- combine_similar_benchmarks(table_data_tp_calls, "PsdUtil")
-table_data_tp_calls <- combine_similar_benchmarks(table_data_tp_calls, "PsdCompose")
-table_data_tp_calls <- combine_similar_benchmarks(table_data_tp_calls, "PsdImage")
-table_data_tp_calls <- combine_similar_benchmarks(table_data_tp_calls, "ChunkyCanvas")
-table_data_tp_calls <- combine_similar_benchmarks(table_data_tp_calls, "ChunkyColor")  %>% dplyr::arrange(Benchmark) %>% remove_after_column() %>% apply_big_numbers()
-#table_data_tp_calls <- switch_last_two(table_data_tp_calls)
-
-#table_data_tp_call_sites <- add_total_row(table_data_tp_call_sites)
-table_data_tp_call_sites <- combine_similar_benchmarks(table_data_tp_call_sites, "PsdUtil")
-table_data_tp_call_sites <- combine_similar_benchmarks(table_data_tp_call_sites, "PsdCompose")
-table_data_tp_call_sites <- combine_similar_benchmarks(table_data_tp_call_sites, "PsdImage")
-table_data_tp_call_sites <- combine_similar_benchmarks(table_data_tp_call_sites, "ChunkyCanvas")
-table_data_tp_call_sites <- combine_similar_benchmarks(table_data_tp_call_sites, "ChunkyColor")  %>% dplyr::arrange(Benchmark) %>% remove_after_column() %>% apply_big_numbers()
-#table_data_tp_call_sites <- switch_last_two(table_data_tp_call_sites)
-
-blogRails_calls <- table_data_tp_calls %>% filter(Benchmark == "BlogRails")
-blogRails_call_sites <- table_data_tp_call_sites %>% filter(Benchmark == "BlogRails")
-
-#table_data_split_calls <- add_total_row(table_data_split_calls)
-table_data_split_calls <- combine_similar_benchmarks(table_data_split_calls, "PsdUtil")
-table_data_split_calls <- combine_similar_benchmarks(table_data_split_calls, "PsdCompose")
-table_data_split_calls <- combine_similar_benchmarks(table_data_split_calls, "PsdImage")
-table_data_split_calls <- combine_similar_benchmarks(table_data_split_calls, "ChunkyCanvas")
-table_data_split_calls <- combine_similar_benchmarks(table_data_split_calls, "ChunkyColor")  %>% dplyr::arrange(Benchmark) %>% remove_after_column() %>% apply_big_numbers()
-#table_data_split_calls <- switch_last_two(table_data_split_calls)
-
-#table_data_split_call_sites <- add_total_row(table_data_split_call_sites)
-table_data_split_call_sites <- combine_similar_benchmarks(table_data_split_call_sites, "PsdUtil")
-table_data_split_call_sites <- combine_similar_benchmarks(table_data_split_call_sites, "PsdCompose")
-table_data_split_call_sites <- combine_similar_benchmarks(table_data_split_call_sites, "PsdImage")
-table_data_split_call_sites <- combine_similar_benchmarks(table_data_split_call_sites, "ChunkyCanvas")
-table_data_split_call_sites <- combine_similar_benchmarks(table_data_split_call_sites, "ChunkyColor")  %>% dplyr::arrange(Benchmark) %>% remove_after_column() %>% apply_big_numbers()
-#table_data_split_call_sites <- switch_last_two(table_data_split_call_sites)
-
-#data_split_transitions <- add_total_row_split(data_split_transitions)
-data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "PsdUtil")
-data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "PsdCompose")
-data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "PsdImage")
-data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "ChunkyCanvas")
-data_split_transitions <- combine_similar_benchmarks(data_split_transitions, "ChunkyColor")  %>% dplyr::arrange(Benchmark) %>% remove_after_column() %>% apply_big_numbers()
-#data_split_transitions <- switch_last_two(data_split_transitions)
-
-
-# and all latexed
-latex_tp_calls_poly <- build_nice_latex_table_no_mega(tp_calls[[2]] %>% select(-contains("MEGA")), label_text = "tp_calls_poly", "Eliminating target duplicates in the cache is very effective at reducing polymorphism: the amount of polymorphic calls is reduced by at least 24.6 \\%.")
-latex_tp_call_sites_poly <- build_nice_latex_table_no_mega(tp_call_sites[[2]] %>% select(-contains("MEGA")), label_text = "tp_call_sites_poly")
-
-latex_split_calls_poly <- build_nice_latex_table_no_mega(split_calls[[2]] %>% select(-contains("MEGA")), label_text = "split_calls_poly", "Splitting succeeds at almost completely monomorphizing the remaining polymorphic calls. Only one polymorphic call-site remains in DeltaBlue.",  c("", "MONO"=2, "POLY"=2, "SPLIT INFO"=1))
-latex_split_call_sites_poly <- build_nice_latex_table_no_mega(split_call_sites[[2]] %>% select(-contains("MEGA")), label_text = "split_call_sites_poly", "Splitting succeds at completely monomorphizing the remaining polymoprhic calls")
-
-latex_tp_mono <- kableExtra::kable(tp_mono, booktabs = TRUE, linesep = "", label = "tp_mono", align = "r", caption = "The list of the monomorphic benchmarks of our set. The ones suffixed by a star have been aggregated due to their similar behavior: the values for Num.Calls and Num.Call.Sites are the average of the group.") %>%
-  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
-
-latex_split_mono <- kableExtra::kable(split_mono, booktabs = TRUE, linesep = "", label = "split_mono", align = "r", caption = "The list of the monomorphic benchmarks of our set. The ones suffixed by a star have been aggregated due to their similar behavior: the values for Num.Calls and Num.Call.Sites are the average of the group.") %>%
-  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
-
-latex_data_split_transitions <- kableExtra::kable(data_split_transitions, booktabs = TRUE, linesep = "", label = "split_transitions", align = "r", caption = "TODO - suggests oversplitting") %>%
-  kableExtra::row_spec(nrow(data_split_transitions), bold = TRUE, background = "#AFAFAF") %>%
-  kableExtra::kable_styling(latex_options = c("hold_position","scale_down", "striped"))
-
-############################################## LATEX COMMAND GENERATION ##############################################
-
-@
-\def\SplitCallSitesPoly{%
-<<SplitCallSitesPoly, echo=FALSE, results='asis'>>=
-print(latex_split_call_sites_poly)
-  @
-  }%
-  
-\def\SplitCallsPoly{%
-<<SplitCallsPoly, echo=FALSE, results='asis'>>=
-print(latex_split_calls_poly)
-  @
-  }%
-
-\def\SplitMono{%
-<<SplitMono, echo=FALSE, results='asis'>>=
-print(latex_split_mono)
-  @
-  }%
-
-\def\TPCallSitesPoly{%
-<<TPCallSitesPoly, echo=FALSE, results='asis'>>=
-print(latex_tp_call_sites_poly)
-  @
-  }%
-
-\def\TPCallsPoly{%
-<<TPCallsPoly, echo=FALSE, results='asis'>>=
-print(latex_tp_calls_poly)
-  @
-  }%
-
-\def\TPMono{%
-<<TPMono, echo=FALSE, results='asis'>>=
-print(latex_tp_mono)
-  @
-  }%
-  
-\def\CallSites{%
-<<CallSites, echo=FALSE, results='asis'>>=
-print(latex_tp_call_sites_poly)
-print(latex_split_call_sites_poly)
-  @
-  }%
-  
-\def\SplittingTransitions{%
-<<SplittingTransitions, echo=FALSE, results='asis'>>=
-print(latex_data_split_transitions)
-  @
-  }%
+table_split_transitions_latex <- kableExtra::kable(table_split_transitions, booktabs = TRUE, align = "r")
