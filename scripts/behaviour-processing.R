@@ -105,6 +105,14 @@ add_lookup_status_per_call <- function(df_p) {
   return(df)
 }
 
+cluster_benchmarks <- function(df) {
+  df <- df %>%
+    dplyr::mutate(Cluster.Type = case_when(Freq.Poly.Calls <= 0.5 ~ "Monomorphic",
+                                          Freq.Poly.Calls > 0.5 & Freq.Poly.Calls <= 5 ~ "Polymorphic.Moderate",
+                                          Freq.Poly.Calls > 5 ~ "Polymorphic.Significant"))
+  return(df)
+}
+
 add_lookup_status <- function(df_p, type) {
   df <- df_p %>%
     ungroup() %>%

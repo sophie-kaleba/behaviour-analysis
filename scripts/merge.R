@@ -33,7 +33,7 @@ apply_big_numbers <- function(df) {
 
 add_percent <- function(df, list_of_col_names) {
   for (col in list_of_col_names) {
-    df[[col]] <- paste(df[[col]], "%", sep = "")
+    df[[col]] <- paste(formatC(df[[col]], digits = 1), "%", sep = "")
   }
   return (df)
 }
@@ -59,9 +59,9 @@ sum_poly <- function(df) {
   df$Mega.Call.Sites <- rowSums(df[grep('^([9]|[1-9][0-9][0-9]|[1-9][0-9])_\\w+.\\w+.S', names(df))])
 
   df$Total.Calls <- rowSums(df[grep('^([1-9]|[1-9][0-9][0-9]|[1-9][0-9])_\\w+.\\w+s', names(df))])
-  df$Freq.Poly.Calls <- round(((df$Poly.Calls+df$Mega.Calls)/df$Total.Calls)*100,0)
+  df$Freq.Poly.Calls <- round(((df$Poly.Calls+df$Mega.Calls)/df$Total.Calls)*100,1)
   df$Total.Call.Sites <- rowSums(df[grep('^([1-9]|[1-9][0-9][0-9]|[1-9][0-9])_\\w+.\\w+.S', names(df))])
-  df$Freq.Poly.Call.Sites <- round(((df$Poly.Call.Sites+df$Mega.Call.Sites)/df$Total.Call.Sites)*100,0)
+  df$Freq.Poly.Call.Sites <- round(((df$Poly.Call.Sites+df$Mega.Call.Sites)/df$Total.Call.Sites)*100,1)
   
   return(df %>% dplyr::mutate(across(!Benchmark, as.numeric)))
 }
