@@ -25,6 +25,10 @@ count_things <- function(df, grouped) {
     n_distinct(df %>% dplyr::select(all_of(grouped))) 
 }
 
+compute_weight <- function(subset, total, digits=0) {
+  round((subset / total) * 100, digits)
+}
+
 clean_data_file <- function(df_p, keep_blocks) {
   if (keep_blocks) {
     df <- df_p %>%
@@ -105,12 +109,29 @@ add_lookup_status_per_call <- function(df_p) {
   return(df)
 }
 
+# cluster_benchmarks <- function(df) {
+#   df <- df %>%
+#     dplyr::mutate(Cluster.Type = case_when(Freq.Poly.Calls <= 0.5 ~ "Monomorphic",
+#                                           Freq.Poly.Calls > 0.5 & Freq.Poly.Calls <= 5 ~ "Polymorphic.Moderate",
+#                                           Freq.Poly.Calls > 5 ~ "Polymorphic.Significant"))
+#   return(df)
+# }
+
 cluster_benchmarks <- function(df) {
   df <- df %>%
-    dplyr::mutate(Cluster.Type = case_when(Freq.Poly.Calls <= 0.5 ~ "Monomorphic",
-                                          Freq.Poly.Calls > 0.5 & Freq.Poly.Calls <= 5 ~ "Polymorphic.Moderate",
-                                          Freq.Poly.Calls > 5 ~ "Polymorphic.Significant"))
+    dplyr::mutate(Cluster.Type = case_when(Mega.Call.Sites > 0 ~ "Megamorphic",
+                                          Poly.Call.Sites > 0 & Freq.Poly.Call.Sites >= 2.0  ~ "Polymorphic.Medium",
+                                          Mono.Call.Sites > 0 & Poly.Call.Sites > 0 & Freq.Poly.Call.Sites < 2.0 ~ "Polymorphic.Small"))
   return(df)
+}
+
+cluster_styling <- function(kable_table, df) {
+  style <- kable_table %>%
+    kableExtra::kable_styling(latex_table_env="tabularx") %>%
+    kableExtra::row_spec(which(df$Cluster.Type == "Polymorphic.Small"), background = "blue1light") %>%
+    kableExtra::row_spec(which(df$Cluster.Type == "Polymorphic.Medium"), background = "blue1medium") %>%
+    kableExtra::row_spec(which(df$Cluster.Type == "Megamorphic"), background = "blue1dark")
+  return(style)
 }
 
 add_lookup_status <- function(df_p, type) {

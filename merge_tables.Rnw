@@ -25,16 +25,7 @@ folder_path = "Methods"
 # Coverage data
 coverage_data <- load_all_tables(folder_status, FALSE, folder_pattern="Coverage/Global") 
 colnames(coverage_data) <- c("Benchmark", "Num.LOC", "LOC.Cov", "Num.Fn", "Fn.Cov")
-coverage_data$Benchmark <- revalue(coverage_data$Benchmark, 
-                            c("AsciidoctorConvertSmall"  = "ADConvert",
-                              "AsciidoctorLoadFileSmall" = "ADLoadFile",        
-                              "BlogRailsRoutesTwoRoutesTwoRequests" = "BlogRails",             
-                              "ChunkyDecodePngImagePass" = "ChunkyDec",                      
-                              "FannkuchRedux" = "Fannkuch",                                          
-                              "ImageDemoConv" = "ImgDemoConv",
-                              "ImageDemoSobel" = "ImgDemoSobel",                 
-                              "LeeBench" = "Lee",       
-                              "SinatraHello" = "Sinatra"))
+coverage_data <- rename_benchs(coverage_data, benchs_small_names)
 
 # Behaviour data - General
 data <- load_all_tables(folder_status, folder_pattern = file.path(folder_path,"General"), patt="one") %>% replace(is.na(.), 0)
@@ -44,19 +35,11 @@ names(data) <- sub('(\\D+)(\\d+$)', '\\2_\\1', names(data))
 # Behaviour data - Splitting transitions
 table_split_transitions <- load_all_tables(folder_status, folder_pattern = file.path(folder_path,"General") , patt="split")
 
-num_benchmarks <- nrow(coverage_data)
-if (num_benchmarks != nrow(data)) {
-  exit("Both coverage and behaviour tables should have the same number of rows (1 row = 1 benchmark")
-}
-
-coverage_data <- combine_similar_benchmarks(coverage_data, c("PsdUtil","PsdCompose","PsdImage","ChunkyCanvas","ChunkyColor"))
-data <- combine_similar_benchmarks(data, c("PsdUtil","PsdCompose","PsdImage","ChunkyCanvas","ChunkyColor"))
-
-table_split_transitions <- combine_similar_benchmarks(table_split_transitions, c("PsdUtil","PsdCompose","PsdImage","ChunkyCanvas","ChunkyColor"))
 table_split_transitions <- table_split_transitions %>%
-  dplyr::mutate(`MONO->MONO (!=)` = round((`MONO->MONO (!=)` / Times.Splitted) * 100, 0),
-          `MONO->MONO (=)` = round((`MONO->MONO (=)` / Times.Splitted) * 100, 0)) %>%
+  dplyr::mutate(`MONO->MONO (!=)` = compute_weight(`MONO->MONO (!=)`, Times.Splitted),
+                `MONO->MONO (=)` = compute_weight(`MONO->MONO (=)`, Times.Splitted)) %>%
   select("Benchmark","Times.Splitted", "MONO->MONO (!=)", "MONO->MONO (=)" )
+
 ############################################################################################# 
 ## Processing of the behaviour data to distinguish between the different call-site optimisations
 
@@ -64,46 +47,34 @@ before <- data %>%
   select(1:6, contains("Before"))
 names(before) <- sub('(\\d+)_([a-zA-Z]+).(\\D+)_', '\\1_\\3', names(before))
 before <- before[ , gtools::mixedsort(names(before))] %>% select(c("Benchmark", "Num.LOC", "LOC.Cov", "Num.Fn", "Fn.Cov", "Times.Splitted"), everything())
-before <- sum_poly(before)  %>% cluster_benchmarks()
-
-benchmark_types <- before %>%
-  select(Benchmark, Cluster.Type)
+before <- sum_poly(before)  
 
 tp <- data %>%
   select(1:6, contains("TP"))
 names(tp) <- sub('(\\d+)_([a-zA-Z]+).(\\D+)_', '\\1_\\3', names(tp))
 tp <- tp[ , gtools::mixedsort(names(tp))] %>% select(c("Benchmark", "Num.LOC", "LOC.Cov", "Num.Fn", "Fn.Cov", "Times.Splitted"), everything())
 tp <- sum_poly(tp)  
-tp <- merge(tp, benchmark_types, by="Benchmark")
 
 splitting <- data %>%
   select(1:6, contains("Split"))
 names(splitting) <- sub('(\\d+)_([a-zA-Z]+).(\\D+)_', '\\1_\\3', names(splitting))
 splitting <- splitting[ , gtools::mixedsort(names(splitting))] %>% select(c("Benchmark", "Num.LOC", "LOC.Cov", "Num.Fn", "Fn.Cov", "Times.Splitted"), everything())
 splitting <- sum_poly(splitting) 
-splitting <- merge(splitting, benchmark_types, by="Benchmark")
 
 ############################################################################################# 
 ## Build the summary tables
 # Build the general metrics table
-table_one <- before %>%
-  select(Benchmark, Num.LOC, LOC.Cov, Num.Fn, Fn.Cov, Max.Target, Mono.Call.Sites, Mono.Calls, Poly.Call.Sites, Poly.Calls, Mega.Call.Sites, Mega.Calls, Total.Calls, Freq.Poly.Calls, Total.Call.Sites, Freq.Poly.Call.Sites, Cluster.Type) %>% dplyr::arrange(Cluster.Type, Benchmark)
+table_one <- before %>% 
+  cluster_benchmarks() %>%
+  select(Benchmark, Num.LOC, LOC.Cov, Num.Fn, Fn.Cov, Max.Target, Mono.Call.Sites, Mono.Calls, Poly.Call.Sites, Poly.Calls, Mega.Call.Sites, Mega.Calls, Total.Calls, Freq.Poly.Calls, Total.Call.Sites, Freq.Poly.Call.Sites, Cluster.Type)
 
-table_mono <- table_one %>% filter(Cluster.Type == "Monomorphic")
-table_poly_mod <- table_one %>% filter(Cluster.Type == "Polymorphic.Moderate")
-table_poly_sign <- table_one %>% filter(Cluster.Type == "Polymorphic.Significant")
+# This is required so that the group of benchmark stays the same across all tables
+benchmark_types <- table_one %>%
+  select(Benchmark, Cluster.Type)
 
-# For table 2 and 3, we need to have 3 temporary tables, one before optim, one after tp, one after splitting
-table_before_aux <- before %>%
-  select(Benchmark, Mono.Calls, Mono.Call.Sites, Poly.Calls, Poly.Call.Sites, Mega.Calls, Mega.Call.Sites, Max.Target, Cluster.Type)
-
-table_tp_aux <- tp %>%
-  select(Benchmark, Mono.Calls, Mono.Call.Sites, Poly.Calls, Poly.Call.Sites, Mega.Calls, Mega.Call.Sites, Max.Target, Cluster.Type) %>%
-  rename_with( ~ paste0("TP_", .x), .cols = -c("Benchmark", "Cluster.Type")) 
-
-table_split_aux <- splitting %>%
-  select(Benchmark, Mono.Calls, Mono.Call.Sites, Poly.Calls, Poly.Call.Sites, Mega.Calls, Mega.Call.Sites, Max.Target, Cluster.Type) %>%
-  rename_with( ~ paste0("SPLIT_", .x), .cols = -c("Benchmark", "Cluster.Type"))  
+table_before_aux <- build_summary_tables(before, benchmark_types)
+table_tp_aux <- build_summary_tables(tp, benchmark_types, "TP_")
+table_split_aux <- build_summary_tables(splitting, benchmark_types, "SPLIT_")
 
 # from this table, we can extract Table2, for both calls and call-sites
 table_two_aftertp <- table_before_aux %>%
@@ -135,7 +106,8 @@ table_three_aftersplit <- table_tp_aux %>%
 table_four_max <- table_before_aux %>%
   merge(table_tp_aux) %>%
   merge(table_split_aux) %>%
-  select(Benchmark, Max.Target, TP_Max.Target, SPLIT_Max.Target)
+  select(Benchmark, Max.Target, TP_Max.Target, SPLIT_Max.Target) %>%
+  merge(benchmark_types, by="Benchmark") 
 #  filter(Max.Target > 1) don't summarize just yet, summarize when generating the latex table
 
 ############################################## STARTUP ###############################################
@@ -196,44 +168,96 @@ table_four_max <- table_before_aux %>%
 
 ###############################################################################################################
 
-data_for_plot <- table_four_max %>% tidyr::pivot_longer(!Benchmark, names_to = "Type", values_to="Count") 
-#%>% filter(Benchmark != "BlogRails" & Benchmark != "ERubiRails" & Benchmark != "Sinatra") 
-bar_plot <- ggplot(data_for_plot, aes(x=Benchmark , y=Count, fill = Type)) +  scale_y_log10() +
-  geom_bar(stat = 'identity', position='identity', alpha = 0.5) + theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
+# data_for_plot <- table_four_max %>% tidyr::pivot_longer(!Benchmark, names_to = "Type", values_to="Count") 
+# #%>% filter(Benchmark != "BlogRails" & Benchmark != "ERubiRails" & Benchmark != "Sinatra") 
+# bar_plot <- ggplot(data_for_plot, aes(x=Benchmark , y=Count, fill = Type)) +  scale_y_log10() +
+#   geom_bar(stat = 'identity', position='identity', alpha = 0.5) + theme_classic() + theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) 
 
+############################################## MACROS ###############################################
+num_benchmarks <- nrow(coverage_data)
+if (num_benchmarks != nrow(data)) {
+  exit("Both coverage and behaviour tables should have the same number of rows (1 row = 1 benchmark")
+}
+
+mega_benchs <- nrow(table_one %>% filter(Cluster.Type == "Megamorphic"))
+med_poly_benchs <- nrow(table_one %>% filter(Cluster.Type == "Polymorphic.Medium"))
+small_poly_benchs <- nrow(table_one %>% filter(Cluster.Type == "Polymorphic.Small"))
+
+num_mono_sites <- sum(table_one$Mono.Call.Sites)
+num_poly_sites <- sum(table_one$Poly.Call.Sites)
+num_mega_sites <- sum(table_one$Mega.Call.Sites)
+
+# fn coverage-related bits
+lowest_fn_cov <- table_one %>% arrange(Fn.Cov) %>% head(1)
+lowest_fn_cov <- lowest_fn_cov$Fn.Cov
+
+highest_fn_cov <- table_one %>% arrange(desc(Fn.Cov)) %>% head(1)
+highest_fn_cov <- highest_fn_cov$Fn.Cov
+
+# loc coverage-related bits
+lowest_loc_cov <- table_one %>% arrange(LOC.Cov) %>% head(1)
+lowest_loc_cov <- lowest_loc_cov$LOC.Cov
+
+highest_loc_cov <- table_one %>% arrange(desc(LOC.Cov)) %>% head(1)
+highest_loc_cov <- highest_loc_cov$LOC.Cov
 ############################################## LATEX FORMATTING ###############################################
 # Format the tables so they can be added in a tex file
+
+table_one <- table_one %>% 
+  combine_similar_benchmarks(c("PsdUtil","PsdCompose","PsdImage","ChunkyCanvas","ChunkyColor")) %>% 
+  apply_big_numbers(c("Num.LOC", "Num.Fn", "Total.Calls", "Total.Call.Sites")) %>% 
+  add_percent(c("Freq.Poly.Calls", "Freq.Poly.Call.Sites", "LOC.Cov", "Fn.Cov")) %>% 
+  dplyr::arrange(Cluster.Type, Benchmark)
 table_one_copy <- copy(table_one)
-table_one_latex <- kableExtra::kable(table_one %>% apply_big_numbers() %>% add_percent(c("Freq.Poly.Calls", "Freq.Poly.Call.Sites", "LOC.Cov", "Fn.Cov")) %>% select(-Max.Target, -Mono.Call.Sites, -Mono.Calls, -Poly.Call.Sites, -Poly.Calls, -Mega.Call.Sites, -Mega.Calls, -Cluster.Type), booktabs = TRUE, align = "r", escape = TRUE, linesep=c("")) %>% kableExtra::kable_styling(latex_table_env="tabularx") %>%
-      kableExtra::row_spec(which(table_one_copy$Cluster.Type == "Monomorphic"), background = "blue1light") %>%
-      kableExtra::row_spec(which(table_one_copy$Cluster.Type == "Polymorphic.Moderate"), background = "blue1medium") %>%
-      kableExtra::row_spec(which(table_one_copy$Cluster.Type == "Polymorphic.Significant"), background = "blue1dark")
 
+table_one_latex <- kableExtra::kable(table_one %>% select(-Max.Target, -Mono.Call.Sites, -Mono.Calls, -Poly.Call.Sites, -Poly.Calls, -Mega.Call.Sites, -Mega.Calls, -Cluster.Type), booktabs = TRUE, align = "r", escape = TRUE, linesep=c("")) %>%
+  cluster_styling(table_one_copy)
+
+table_two_aftertp <- table_two_aftertp %>% 
+  combine_similar_benchmarks(c("PsdUtil","PsdCompose","PsdImage","ChunkyCanvas","ChunkyColor")) %>% 
+  apply_big_numbers(c("Mono.Calls", "Mono.Call.Sites", "Poly.Calls", "Poly.Call.Sites", "Mega.Calls", "Mega.Call.Sites")) %>%
+  apply_big_numbers(c("TP_Mono.Calls", "TP_Mono.Call.Sites", "TP_Poly.Calls", "TP_Poly.Call.Sites", "TP_Mega.Calls", "TP_Mega.Call.Sites")) %>%
+  add_percent(c("Change.Poly.Call.Sites", "Change.Mega.Call.Sites", "Change.Poly.Calls", "Change.Mega.Calls")) %>% 
+  dplyr::arrange(Cluster.Type, Benchmark)
 table_two_aftertp_copy <- copy(table_two_aftertp)
-table_two_sites_latex <- kableExtra::kable(table_two_aftertp %>% apply_big_numbers() %>% add_percent(c("Change.Poly.Call.Sites", "Change.Mega.Call.Sites")) %>% select(-Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Calls"), -contains("TP"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% kableExtra::kable_styling(latex_table_env="tabularx") %>%
-      kableExtra::row_spec(which(table_two_aftertp_copy$Cluster.Type == "Monomorphic"), background = "blue1light") %>%
-      kableExtra::row_spec(which(table_two_aftertp_copy$Cluster.Type == "Polymorphic.Moderate"), background = "blue1medium") %>%
-      kableExtra::row_spec(which(table_two_aftertp_copy$Cluster.Type == "Polymorphic.Significant"), background = "blue1dark")
 
-table_two_calls_latex <- kableExtra::kable(table_two_aftertp %>% apply_big_numbers() %>% add_percent(c("Change.Poly.Calls", "Change.Mega.Calls")) %>% select(-Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Sites"), -contains("TP"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% kableExtra::kable_styling(latex_table_env="tabularx") %>%
-      kableExtra::row_spec(which(table_two_aftertp_copy$Cluster.Type == "Monomorphic"), background = "blue1light") %>%
-      kableExtra::row_spec(which(table_two_aftertp_copy$Cluster.Type == "Polymorphic.Moderate"), background = "blue1medium") %>%
-      kableExtra::row_spec(which(table_two_aftertp_copy$Cluster.Type == "Polymorphic.Significant"), background = "blue1dark")
+table_two_sites_latex <- kableExtra::kable(table_two_aftertp %>% select(-Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Calls"), -contains("TP"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c(""))  %>%
+  cluster_styling(table_two_aftertp_copy)
 
+table_two_calls_latex <- kableExtra::kable(table_two_aftertp %>% select(-Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Sites"), -contains("TP"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
+  cluster_styling(table_two_aftertp_copy)
+
+table_three_aftersplit <- table_three_aftersplit %>%
+  combine_similar_benchmarks(c("PsdUtil","PsdCompose","PsdImage","ChunkyCanvas","ChunkyColor")) %>% 
+  apply_big_numbers(c("TP_Mono.Calls", "TP_Mono.Call.Sites", "TP_Poly.Calls", "TP_Poly.Call.Sites", "TP_Mega.Calls", "TP_Mega.Call.Sites")) %>%
+  apply_big_numbers(c("SPLIT_Mono.Calls", "SPLIT_Mono.Call.Sites", "SPLIT_Poly.Calls", "SPLIT_Poly.Call.Sites", "SPLIT_Mega.Calls", "SPLIT_Mega.Call.Sites")) %>% 
+  add_percent(c("Change.Poly.Call.Sites", "Change.Mega.Call.Sites", "Change.Poly.Calls", "Change.Mega.Calls")) %>%
+  dplyr::arrange(Cluster.Type, Benchmark)
 table_three_aftersplit_copy <- copy(table_three_aftersplit)
-table_three_sites_latex <- kableExtra::kable(table_three_aftersplit %>% apply_big_numbers() %>% add_percent(c("Change.Poly.Call.Sites", "Change.Mega.Call.Sites")) %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Calls"), -contains("SPLIT"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% kableExtra::kable_styling(latex_table_env="tabularx") %>%
-      kableExtra::row_spec(which(table_three_aftersplit_copy$Cluster.Type == "Monomorphic"), background = "blue1light") %>%
-      kableExtra::row_spec(which(table_three_aftersplit_copy$Cluster.Type == "Polymorphic.Moderate"), background = "blue1medium") %>%
-      kableExtra::row_spec(which(table_three_aftersplit_copy$Cluster.Type == "Polymorphic.Significant"), background = "blue1dark")
 
-table_three_calls_latex <- kableExtra::kable(table_three_aftersplit %>% apply_big_numbers() %>% add_percent(c("Change.Poly.Calls", "Change.Mega.Calls")) %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Sites"), -contains("SPLIT"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% kableExtra::kable_styling(latex_table_env="tabularx") %>%
-      kableExtra::row_spec(which(table_three_aftersplit_copy$Cluster.Type == "Monomorphic"), background = "blue1light") %>%
-      kableExtra::row_spec(which(table_three_aftersplit_copy$Cluster.Type == "Polymorphic.Moderate"), background = "blue1medium") %>%
-      kableExtra::row_spec(which(table_three_aftersplit_copy$Cluster.Type == "Polymorphic.Significant"), background = "blue1dark")
+table_three_sites_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Calls"), -contains("SPLIT"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
+  cluster_styling(table_three_aftersplit_copy)
 
-table_four_latex <- kableExtra::kable(table_four_max, booktabs = TRUE, align = "r", linesep=c("")) %>% kableExtra::kable_styling(latex_table_env="tabularx")
+table_three_calls_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Sites"), -contains("SPLIT"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
+  cluster_styling(table_three_aftersplit_copy)
 
-table_split_transitions_latex <- kableExtra::kable(table_split_transitions %>% add_percent(c("MONO->MONO (!=)", "MONO->MONO (=)")) , booktabs = TRUE, align = "r", linesep=c(""))
+table_four_max <- table_four_max %>%
+  combine_similar_benchmarks(c("PsdUtil","PsdCompose","PsdImage","ChunkyCanvas","ChunkyColor")) %>% 
+  dplyr::arrange(Cluster.Type, Benchmark)
+table_four_max_copy <- copy(table_four_max)
+
+table_four_latex <- kableExtra::kable(table_four_max %>% select(-Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
+  cluster_styling(table_four_max_copy)
+
+table_split_transitions <- table_split_transitions %>%
+  combine_similar_benchmarks(c("PsdUtil","PsdCompose","PsdImage","ChunkyCanvas","ChunkyColor"), FALSE) %>%
+  merge(benchmark_types, by="Benchmark") %>%
+  dplyr::arrange(Cluster.Type, Benchmark) %>% 
+  add_percent(c("MONO->MONO (!=)", "MONO->MONO (=)"))
+table_split_transitions_copy <- copy(table_split_transitions)
+
+table_split_transitions_latex <- kableExtra::kable(table_split_transitions %>% select(-Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
+  cluster_styling(table_split_transitions_copy)
 
 ############################################## LATEX MACROS ###############################################
 @
@@ -282,4 +306,15 @@ table_split_transitions_latex <- kableExtra::kable(table_split_transitions %>% a
   @
 }%
 
-\newcommand{\NumBenchmarks}{$\Sexpr{num_benchmarks}$x\xspace}
+\newcommand{\NumBenchmarks}{$\Sexpr{num_benchmarks}$\xspace}
+\newcommand{\MegaBenchs}{$\Sexpr{mega_benchs}$\xspace}
+\newcommand{\MedPolyBenchs}{$\Sexpr{med_poly_benchs}$\xspace}
+\newcommand{\SmallPolyBenchs}{$\Sexpr{small_poly_benchs}$\xspace}
+\newcommand{\NumMonoSites}{$\Sexpr{num_mono_sites}$\xspace}
+\newcommand{\NumPolySites}{$\Sexpr{num_poly_sites}$\xspace}
+\newcommand{\NumMegaSites}{$\Sexpr{num_mega_sites}$\xspace}
+
+\newcommand{\LowestFnCov}{$\Sexpr{lowest_fn_cov}$}
+\newcommand{\HighestFnCov}{$\Sexpr{highest_fn_cov}$}
+\newcommand{\LowestLOCCov}{$\Sexpr{lowest_loc_cov}$}
+\newcommand{\HighestLOCCov}{$\Sexpr{highest_loc_cov}$}
