@@ -110,6 +110,7 @@ table_four_max <- table_before_aux %>%
   merge(benchmark_types, by="Benchmark") 
 #  filter(Max.Target > 1) don't summarize just yet, summarize when generating the latex table
 
+
 ############################################## STARTUP ###############################################
 # Behaviour data - General
 # data_nos <- load_all_tables(folder_status, folder_pattern = file.path(folder_path, "NoStartup","General"), patt="one") %>% 
@@ -200,6 +201,22 @@ lowest_loc_cov <- lowest_loc_cov$LOC.Cov
 
 highest_loc_cov <- table_one %>% arrange(desc(LOC.Cov)) %>% head(1)
 highest_loc_cov <- highest_loc_cov$LOC.Cov
+
+lowest_tp_poly <- table_two_aftertp %>% select(Change.Poly.Calls) %>% arrange(desc(Change.Poly.Calls)) %>% head(2)
+lowest_tp_poly_outlier <- lowest_tp_poly$Change.Poly.Calls[[1]]
+lowest_tp_poly_second <- lowest_tp_poly$Change.Poly.Calls[[2]]
+
+highest_tp_poly <- table_two_aftertp %>% select(Change.Poly.Calls) %>% arrange(Change.Poly.Calls) %>% head(1)
+highest_tp_poly <- highest_tp_poly$Change.Poly.Calls
+
+lowest_tp_mega <- table_two_aftertp %>% filter(Cluster.Type == "Megamorphic") %>% select(Change.Mega.Calls) %>% arrange(desc(Change.Mega.Calls)) %>% head(1)
+lowest_tp_mega <- lowest_tp_mega$Change.Mega.Calls
+
+highest_tp_mega <- table_two_aftertp %>% filter(Cluster.Type == "Megamorphic") %>% select(Change.Mega.Calls) %>% arrange(Change.Mega.Calls) %>% head(1)
+highest_tp_mega <- highest_tp_mega$Change.Mega.Calls
+
+num_mono_wout_outlier <- table_one %>% select(Benchmark, Total.Call.Sites,  Mono.Call.Sites) %>% filter(Benchmark != "Sinatra" & Benchmark != "BlogRails" & Benchmark != "ERubiRails" & Benchmark != "HexaPdfSmall") %>% summarise(Total = sum(Total.Call.Sites), Mono = sum(Mono.Call.Sites)) %>% mutate(Result = (Mono / Total) * 100)
+num_mono_wout_outlier <- round(num_mono_wout_outlier$Result, 1)
 ############################################## LATEX FORMATTING ###############################################
 # Format the tables so they can be added in a tex file
 
@@ -217,7 +234,7 @@ table_two_aftertp <- table_two_aftertp %>%
   combine_similar_benchmarks(c("PsdUtil","PsdCompose","PsdImage","ChunkyCanvas","ChunkyColor")) %>% 
   apply_big_numbers(c("Mono.Calls", "Mono.Call.Sites", "Poly.Calls", "Poly.Call.Sites", "Mega.Calls", "Mega.Call.Sites")) %>%
   apply_big_numbers(c("TP_Mono.Calls", "TP_Mono.Call.Sites", "TP_Poly.Calls", "TP_Poly.Call.Sites", "TP_Mega.Calls", "TP_Mega.Call.Sites")) %>%
-  add_percent(c("Change.Poly.Call.Sites", "Change.Mega.Call.Sites", "Change.Poly.Calls", "Change.Mega.Calls")) %>% 
+  add_percent(c("Change.Poly.Sites", "Change.Mega.Sites", "Change.Poly.Calls", "Change.Mega.Calls")) %>% 
   dplyr::arrange(Cluster.Type, Benchmark)
 table_two_aftertp_copy <- copy(table_two_aftertp)
 
@@ -228,17 +245,18 @@ table_two_calls_latex <- kableExtra::kable(table_two_aftertp %>% select(-Max.Tar
   cluster_styling(table_two_aftertp_copy)
 
 table_three_aftersplit <- table_three_aftersplit %>%
+  merge(table_split_transitions %>% select(Benchmark, Times.Splitted), by="Benchmark") %>%
   combine_similar_benchmarks(c("PsdUtil","PsdCompose","PsdImage","ChunkyCanvas","ChunkyColor")) %>% 
   apply_big_numbers(c("TP_Mono.Calls", "TP_Mono.Call.Sites", "TP_Poly.Calls", "TP_Poly.Call.Sites", "TP_Mega.Calls", "TP_Mega.Call.Sites")) %>%
   apply_big_numbers(c("SPLIT_Mono.Calls", "SPLIT_Mono.Call.Sites", "SPLIT_Poly.Calls", "SPLIT_Poly.Call.Sites", "SPLIT_Mega.Calls", "SPLIT_Mega.Call.Sites")) %>% 
-  add_percent(c("Change.Poly.Call.Sites", "Change.Mega.Call.Sites", "Change.Poly.Calls", "Change.Mega.Calls")) %>%
+  add_percent(c("Change.Poly.Sites", "Change.Mega.Sites", "Change.Poly.Calls", "Change.Mega.Calls")) %>%
   dplyr::arrange(Cluster.Type, Benchmark)
 table_three_aftersplit_copy <- copy(table_three_aftersplit)
 
-table_three_sites_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Calls"), -contains("SPLIT"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
+table_three_sites_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Calls"), -contains("SPLIT"), -Cluster.Type, Times.Splitted), booktabs = TRUE, align = "r", linesep=c("")) %>% 
   cluster_styling(table_three_aftersplit_copy)
 
-table_three_calls_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Sites"), -contains("SPLIT"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
+table_three_calls_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Sites"), -contains("SPLIT"), -Cluster.Type, Times.Splitted), booktabs = TRUE, align = "r", linesep=c("")) %>% 
   cluster_styling(table_three_aftersplit_copy)
 
 table_four_max <- table_four_max %>%
@@ -246,12 +264,12 @@ table_four_max <- table_four_max %>%
   dplyr::arrange(Cluster.Type, Benchmark)
 table_four_max_copy <- copy(table_four_max)
 
-table_four_latex <- kableExtra::kable(table_four_max %>% select(-Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
+table_four_latex <- kableExtra::kable(table_four_max %>% filter (Cluster.Type != "Polymorphic.Small") %>% select(-Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
   cluster_styling(table_four_max_copy)
 
 table_split_transitions <- table_split_transitions %>%
-  combine_similar_benchmarks(c("PsdUtil","PsdCompose","PsdImage","ChunkyCanvas","ChunkyColor"), FALSE) %>%
   merge(benchmark_types, by="Benchmark") %>%
+  combine_similar_benchmarks(c("PsdUtil","PsdCompose","PsdImage","ChunkyCanvas","ChunkyColor")) %>%
   dplyr::arrange(Cluster.Type, Benchmark) %>% 
   add_percent(c("MONO->MONO (!=)", "MONO->MONO (=)"))
 table_split_transitions_copy <- copy(table_split_transitions)
@@ -259,6 +277,13 @@ table_split_transitions_copy <- copy(table_split_transitions)
 table_split_transitions_latex <- kableExtra::kable(table_split_transitions %>% select(-Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
   cluster_styling(table_split_transitions_copy)
 
+table_two_calls_latex_mini <- kableExtra::kable(table_two_aftertp %>% filter (Cluster.Type != "Polymorphic.Small") %>% select(-Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Sites"), -contains("TP"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
+  cluster_styling(table_two_aftertp_copy)
+
+table_three_calls_latex_mini <- kableExtra::kable(table_three_aftersplit %>% filter (Cluster.Type != "Polymorphic.Small") %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Sites"), -contains("SPLIT"), -Cluster.Type, Times.Splitted), booktabs = TRUE, align = "r", linesep=c("")) %>% 
+  cluster_styling(table_three_aftersplit_copy)
+
+table_split_transitions %>% select(Benchmark, Times.Splitted) %>% arrange(Times.Splitted)
 ############################################## LATEX MACROS ###############################################
 @
 
@@ -306,6 +331,18 @@ table_split_transitions_latex <- kableExtra::kable(table_split_transitions %>% s
   @
 }%
 
+\def\AfterTPCallsMini{%
+  <<AfterTPCallsMini, echo=FALSE, results='asis'>>=
+    print(table_two_calls_latex_mini)
+  @
+}%
+
+\def\AfterSplitCallsMini{%
+  <<AfterSplitCallsMini, echo=FALSE, results='asis'>>=
+    print(table_three_calls_latex_mini)
+  @
+}%
+
 \newcommand{\NumBenchmarks}{$\Sexpr{num_benchmarks}$\xspace}
 \newcommand{\MegaBenchs}{$\Sexpr{mega_benchs}$\xspace}
 \newcommand{\MedPolyBenchs}{$\Sexpr{med_poly_benchs}$\xspace}
@@ -313,8 +350,15 @@ table_split_transitions_latex <- kableExtra::kable(table_split_transitions %>% s
 \newcommand{\NumMonoSites}{$\Sexpr{num_mono_sites}$\xspace}
 \newcommand{\NumPolySites}{$\Sexpr{num_poly_sites}$\xspace}
 \newcommand{\NumMegaSites}{$\Sexpr{num_mega_sites}$\xspace}
+\newcommand{\FreqMonoWoutOutliers}{$\Sexpr{num_mono_wout_outlier}$}
 
 \newcommand{\LowestFnCov}{$\Sexpr{lowest_fn_cov}$}
 \newcommand{\HighestFnCov}{$\Sexpr{highest_fn_cov}$}
 \newcommand{\LowestLOCCov}{$\Sexpr{lowest_loc_cov}$}
 \newcommand{\HighestLOCCov}{$\Sexpr{highest_loc_cov}$}
+
+\newcommand{\LowestTPPoly}{$\Sexpr{abs(lowest_tp_poly_outlier)}$}
+\newcommand{\LowestTPPolySecond}{$\Sexpr{abs(lowest_tp_poly_second)}$}
+\newcommand{\HighestTPPoly}{$\Sexpr{abs(highest_tp_poly)}$}
+\newcommand{\LowestMegaPoly}{$\Sexpr{abs(lowest_tp_mega)}$}
+\newcommand{\HighestMegaPoly}{$\Sexpr{abs(highest_tp_mega)}$}
