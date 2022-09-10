@@ -92,7 +92,7 @@ combine_similar_benchmarks <- function(df, benchmarks, cluster=TRUE) {
     row.names(table_mean) <- "Mean"
     
     if (cluster) {
-      cluster_aux <- table_one %>%
+      cluster_aux <- df %>%
         filter(str_detect(Benchmark, bench)) %>%
         select(Cluster.Type)
       cluster_type <- unique(unlist(cluster_aux))
