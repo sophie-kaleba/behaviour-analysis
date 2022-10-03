@@ -1,0 +1,114 @@
+% \Metrics
+\begin{tabularx}{0.5\textwidth}{rr *{7}{Y}}
+    \hline
+    \rowcolor[HTML]{F3F3F3} 
+    \centering \textbf{Benchmark} & \centering \textbf{Stmts} & \textbf{\begin{tabular}[c]{@{}c@{}}Stmts\\ Cov.\end{tabular}} & \textbf{Fns} & \textbf{\begin{tabular}[c]{@{}c@{}}Fns\\ Cov.\end{tabular}} & \textbf{kCalls} & \textbf{\begin{tabular}[c]{@{}c@{}}Poly+\\Mega.\\ calls\end{tabular}} & \textbf{\begin{tabular}[c]{@{}c@{}}Exec.\\ call-\\sites\end{tabular}} & \textbf{\begin{tabular}[c]{@{}c@{}}Poly+\\Mega. \\ call-\\sites\end{tabular}} \\\hline
+
+
+% \AfterTPCalls
+\begin{tabularx}{0.45\textwidth}{r *{4}{Y}}
+    \hline
+     & \multicolumn{2}{c}{\cellcolor[HTML]{F3F3F3}\textbf{\begin{tabular}[c]{@{}c@{}}Number of calls\end{tabular}}} & \multicolumn{2}{c}{\cellcolor[HTML]{F3F3F3}\textbf{\begin{tabular}[c]{@{}c@{}}After eliminating \\ target duplicates\end{tabular}}} \\ \hline
+     \rowcolor[HTML]{F3F3F3} 
+     \multicolumn{1}{c}{\cellcolor[HTML]{F3F3F3}\textbf{Benchmark}} & \centering \textbf{Poly.} & \centering \textbf{Mega.} & \centering \textbf{Poly.} & \centering \textbf{Mega.} \tabularnewline \hline
+
+
+% \AfterTPSites
+\begin{tabularx}{0.45\textwidth}{r *{4}{Y}}
+    \hline
+     & \multicolumn{2}{c}{\cellcolor[HTML]{F3F3F3}\textbf{\begin{tabular}[c]{@{}c@{}}Number of call-sites\end{tabular}}} & \multicolumn{2}{c}{\cellcolor[HTML]{F3F3F3}\textbf{\begin{tabular}[c]{@{}c@{}}After eliminating \\ target duplicates\end{tabular}}} \\ \hline
+     \rowcolor[HTML]{F3F3F3} 
+     \multicolumn{1}{c}{\cellcolor[HTML]{F3F3F3}\textbf{Benchmark}} & \centering \textbf{Poly.} & \centering \textbf{Mega.} & \centering \textbf{Poly.} & \centering \textbf{Mega.} \tabularnewline \hline
+
+
+% \AfterSplitCalls
+\begin{tabularx}{0.45\textwidth}{r *{5}{Y}}
+    \hline
+    \multicolumn{1}{c}{} & \multicolumn{2}{c}{{\cellcolor[rgb]{0.937,0.937,0.937}}\begin{tabular}[c]{@{}>{\cellcolor[rgb]{0.937,0.937,0.937}}c@{}}\textbf{Number of calls}\end{tabular}} & \multicolumn{2}{c}{{\cellcolor[rgb]{0.937,0.937,0.937}}\begin{tabular}[c]{@{}>{\cellcolor[rgb]{0.937,0.937,0.937}}c@{}}\textbf{After splitting}\end{tabular}} & {\cellcolor[rgb]{0.937,0.937,0.937}} \\ \hline
+    \rowcolor[rgb]{0.937,0.937,0.937} \centering \textbf{Benchmark} & \centering \textbf{Poly.} & \centering \textbf{Mega.} & \centering \textbf{Poly.} & \centering \textbf{Mega.} & \multirow{-2}{*}{{\cellcolor[rgb]{0.937,0.937,0.937}}\begin{tabular}[c]{@{}>{\cellcolor[rgb]{0.937,0.937,0.937}}c@{}}\textbf{Number}\\\textbf{of splits}\end{tabular}} \tabularnewline \hline
+
+
+% \AfterSplitSites
+\begin{tabularx}{0.45\textwidth}{r *{5}{Y}}
+    \hline
+    \multicolumn{1}{c}{} & \multicolumn{2}{c}{{\cellcolor[rgb]{0.937,0.937,0.937}}\begin{tabular}[c]{@{}>{\cellcolor[rgb]{0.937,0.937,0.937}}c@{}}\textbf{Number of call-sites}\end{tabular}} & \multicolumn{2}{c}{{\cellcolor[rgb]{0.937,0.937,0.937}}\begin{tabular}[c]{@{}>{\cellcolor[rgb]{0.937,0.937,0.937}}c@{}}\textbf{After splitting}\end{tabular}} & {\cellcolor[rgb]{0.937,0.937,0.937}} \\ \hline
+    \rowcolor[rgb]{0.937,0.937,0.937} \centering \textbf{Benchmark} & \centering \textbf{Poly.} & \centering \textbf{Mega.} & \centering \textbf{Poly.} & \centering \textbf{Mega.} & \multirow{-2}{*}{{\cellcolor[rgb]{0.937,0.937,0.937}}\begin{tabular}[c]{@{}>{\cellcolor[rgb]{0.937,0.937,0.937}}c@{}}\textbf{Number}\\\textbf{of splits}\end{tabular}} \tabularnewline \hline
+
+
+% \Extent
+\begin{tabularx}{0.4\textwidth}{r *{3}{Y}}
+    \hline
+    \multicolumn{1}{l}{} & \multicolumn{3}{c}{\cellcolor[HTML]{EFEFEF}\textbf{Biggest cache size (number of targets)}} \\ \hline
+    \rowcolor[HTML]{EFEFEF}
+    \multicolumn{1}{c}{\cellcolor[HTML]{F3F3F3}\textbf{Benchmark}} & \multicolumn{1}{c}{\cellcolor[HTML]{F3F3F3}\textbf{\begin{tabular}[c]{@{}c@{}}before\\ all \\ optimisations\end{tabular}}} & \multicolumn{1}{c}{\cellcolor[HTML]{F3F3F3}\textbf{\begin{tabular}[c]{@{}c@{}}after \\ eliminating \\ duplicates\end{tabular}}} & \multicolumn{1}{c}{\cellcolor[HTML]{F3F3F3}\textbf{\begin{tabular}[c]{@{}c@{}}after \\ splitting\end{tabular}}} \tabularnewline \hline
+
+
+% \SplittingTransisions
+\begin{tabularx}{0.43\textwidth}{r *{3}{Y}}
+    \hline
+    \multicolumn{2}{c}{\textbf{}} & \multicolumn{2}{c}{\cellcolor[HTML]{EFEFEF}\textbf{\begin{tabular}[c]{@{}c@{}}Cache entries \\ after splitting \\(\% of total number of splits)\end{tabular}}} \\ \hline
+    \rowcolor[HTML]{EFEFEF} 
+    \multicolumn{1}{c}{\cellcolor[HTML]{EFEFEF}\textbf{Benchmark}} & \centering \textbf{\begin{tabular}[Y]{@{}c@{}}Number\\ of splits\end{tabular}} & \multicolumn{1}{c}{\cellcolor[HTML]{EFEFEF}\textbf{Different}} & \centering \textbf{Same} \tabularnewline \hline
+
+
+% \AfterTPCallsMini
+\begin{tabularx}{0.45\textwidth}{r *{4}{Y}}
+    \hline
+     & \multicolumn{2}{c}{\cellcolor[HTML]{F3F3F3}\textbf{\begin{tabular}[c]{@{}c@{}}Number of calls\end{tabular}}} & \multicolumn{2}{c}{\cellcolor[HTML]{F3F3F3}\textbf{\begin{tabular}[c]{@{}c@{}}After eliminating \\ target duplicates\end{tabular}}} \\ \hline
+     \rowcolor[HTML]{F3F3F3} 
+     \multicolumn{1}{c}{\cellcolor[HTML]{F3F3F3}\textbf{Benchmark}} & \centering \textbf{Poly.} & \centering \textbf{Mega.} & \centering \textbf{Poly.} & \centering \textbf{Mega.} \tabularnewline \hline
+
+
+% \AfterSplitCallsMini
+\begin{tabularx}{0.45\textwidth}{r *{5}{Y}}
+    \hline
+    \multicolumn{1}{c}{} & \multicolumn{2}{c}{{\cellcolor[rgb]{0.937,0.937,0.937}}\begin{tabular}[c]{@{}>{\cellcolor[rgb]{0.937,0.937,0.937}}c@{}}\textbf{Number of calls}\end{tabular}} & \multicolumn{2}{c}{{\cellcolor[rgb]{0.937,0.937,0.937}}\begin{tabular}[c]{@{}>{\cellcolor[rgb]{0.937,0.937,0.937}}c@{}}\textbf{After splitting}\end{tabular}} & {\cellcolor[rgb]{0.937,0.937,0.937}} \\ \hline
+    \rowcolor[rgb]{0.937,0.937,0.937} \centering \textbf{Benchmark} & \centering \textbf{Poly.} & \centering \textbf{Mega.} & \centering \textbf{Poly.} & \centering \textbf{Mega.} & \multirow{-2}{*}{{\cellcolor[rgb]{0.937,0.937,0.937}}\begin{tabular}[c]{@{}>{\cellcolor[rgb]{0.937,0.937,0.937}}c@{}}\textbf{Number}\\\textbf{of splits}\end{tabular}} \tabularnewline \hline
+
+
+%\BlockMetrics{%
+\begin{tabularx}{0.5\textwidth}{rYYYY|
+    >{\columncolor[HTML]{D3D3D3}}Y 
+    >{\columncolor[HTML]{D3D3D3}}Y 
+    >{\columncolor[HTML]{D3D3D3}}Y 
+    >{\columncolor[HTML]{D3D3D3}}Y }
+        & \multicolumn{4}{c|}{\textbf{METHODS}} & \multicolumn{4}{c}{\cellcolor[HTML]{D3D3D3}\textbf{CLOSURES}} \\ \hline
+    \multicolumn{1}{c}{\textbf{Benchmark}} & \textbf{kCalls} & \textbf{\begin{tabular}[c]{@{}c@{}}Poly+\\Mega.\\calls\end{tabular}} & \textbf{\begin{tabular}[c]{@{}c@{}}Exec.\\ call-\\sites\end{tabular}} & \textbf{\begin{tabular}[c]{@{}c@{}}Poly+\\Mega.\\call-\\sites\end{tabular}} & \textbf{kCalls} & \textbf{\begin{tabular}[c]{@{}c@{}}Poly+\\Mega.\\calls\end{tabular}} & \textbf{\begin{tabular}[c|]{@{}c@{}}Exec.\\call-\\ sites\end{tabular}} & \textbf{\begin{tabular}[c]{@{}c@{}}Poly.+\\Mega\\call-\\sites\end{tabular}} \tabularnewline \hline
+
+
+%\BlockExtent{%
+\begin{tabularx}{0.5\textwidth}{rYYY|
+    >{\columncolor[HTML]{D3D3D3}}Y 
+    >{\columncolor[HTML]{D3D3D3}}Y}
+        & \multicolumn{3}{c|}{\textbf{METHODS}} & \multicolumn{2}{c}{\cellcolor[HTML]{C0C0C0}\textbf{CLOSURES}} \\ \hline
+        \multicolumn{1}{c}{\cellcolor[HTML]{F3F3F3}\textbf{Benchmark}} & \multicolumn{1}{c}{\cellcolor[HTML]{F3F3F3}\textbf{\begin{tabular}[c]{@{}c@{}}Before \\ all\end{tabular}}} & \multicolumn{1}{c}{\cellcolor[HTML]{F3F3F3}\textbf{\begin{tabular}[c]{@{}c@{}}after \\ TP\end{tabular}}} & \multicolumn{1}{c}{\cellcolor[HTML]{F3F3F3}\textbf{\begin{tabular}[c]{@{}c@{}}after \\ splitting\end{tabular}}} & \multicolumn{1}{c}{\cellcolor[HTML]{C0C0C0}\textbf{\begin{tabular}[c]{@{}c@{}}Before \\ all\end{tabular}}} & \multicolumn{1}{c}{\cellcolor[HTML]{C0C0C0}\textbf{\begin{tabular}[c]{@{}c@{}}after \\ TP\end{tabular}}}  \tabularnewline \hline
+
+
+%\BlockAfterSplitCallsMini
+\begin{tabularx}{0.5\textwidth}{rYY|
+    >{\columncolor[HTML]{C0C0C0}}Y 
+    >{\columncolor[HTML]{C0C0C0}}Y 
+    >{\columncolor[HTML]{C0C0C0}}Y 
+    >{\columncolor[HTML]{C0C0C0}}Y }
+    & \multicolumn{2}{c|}{\textbf{METHODS}} & \multicolumn{4}{c}{\cellcolor[HTML]{C0C0C0}\textbf{CLOSURES}} \\ \hline 
+    \multirow{-2}{*}{} & \multicolumn{2}{c|}{\textbf{\begin{tabular}[c]{@{}c@{}}After \\ eliminating \\ duplicates\\ and splitting\end{tabular}}} & \multicolumn{2}{c}{\cellcolor[HTML]{C0C0C0}\textbf{\begin{tabular}[c]{@{}c@{}}Before splitting\\ (number of calls)\end{tabular}}} & \multicolumn{2}{c}{\cellcolor[HTML]{C0C0C0}\textbf{\begin{tabular}[c]{@{}c@{}}After Splitting\\ (\% change)\end{tabular}}} \\ \hline
+    \multicolumn{1}{c}{\textbf{Benchmark}} & \multicolumn{1}{c}{\textbf{Poly.}} & \textbf{Mega.} & \multicolumn{1}{c}{\cellcolor[HTML]{C0C0C0}\textbf{Poly.}} & \multicolumn{1}{c}{\cellcolor[HTML]{C0C0C0}\textbf{Mega.}} & \multicolumn{1}{c}{\cellcolor[HTML]{C0C0C0}\textbf{Poly.}} & \textbf{Mega.} \tabularnewline \hline
+
+
+%BlockAfterSplitSites
+\begin{tabularx}{0.5\textwidth}{rYY|
+    >{\columncolor[HTML]{C0C0C0}}Y 
+    >{\columncolor[HTML]{C0C0C0}}Y 
+    >{\columncolor[HTML]{C0C0C0}}Y 
+    >{\columncolor[HTML]{C0C0C0}}Y }
+    & \multicolumn{2}{c|}{\textbf{METHODS}} & \multicolumn{4}{c}{\cellcolor[HTML]{C0C0C0}\textbf{CLOSURES}} \\ \hline 
+    \multirow{-2}{*}{} & \multicolumn{2}{c|}{\textbf{\begin{tabular}[c]{@{}c@{}}After \\ eliminating \\ duplicates\\ and splitting\end{tabular}}} & \multicolumn{2}{c}{\cellcolor[HTML]{C0C0C0}\textbf{\begin{tabular}[c]{@{}c@{}}Before splitting\\ (number of sites)\end{tabular}}} & \multicolumn{2}{c}{\cellcolor[HTML]{C0C0C0}\textbf{\begin{tabular}[c]{@{}c@{}}After Splitting\\ (\% change)\end{tabular}}} \\ \hline
+    \multicolumn{1}{c}{\textbf{Benchmark}} & \multicolumn{1}{c}{\textbf{Poly.}} & \textbf{Mega.} & \multicolumn{1}{c}{\cellcolor[HTML]{C0C0C0}\textbf{Poly.}} & \multicolumn{1}{c}{\cellcolor[HTML]{C0C0C0}\textbf{Mega.}} & \multicolumn{1}{c}{\cellcolor[HTML]{C0C0C0}\textbf{Poly.}} & \textbf{Mega.} \tabularnewline \hline
+
+
+%BlockSplittingTransitions
+\begin{tabularx}{0.43\textwidth}{r *{3}{Y}}
+    \hline
+    \multicolumn{2}{c}{\textbf{}} & \multicolumn{2}{c}{\cellcolor[HTML]{EFEFEF}\textbf{\begin{tabular}[c]{@{}c@{}}Cache entries \\ after splitting \\(\% of total number of splits)\end{tabular}}} \\ \hline
+    \rowcolor[HTML]{EFEFEF} 
+    \multicolumn{1}{c}{\cellcolor[HTML]{EFEFEF}\textbf{Benchmark}} & \centering \textbf{\begin{tabular}[Y]{@{}c@{}}Number\\ of splits\end{tabular}} & \multicolumn{1}{c}{\cellcolor[HTML]{EFEFEF}\textbf{Different}} & \centering \textbf{Same} \tabularnewline \hline
