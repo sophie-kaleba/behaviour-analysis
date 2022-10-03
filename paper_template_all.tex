@@ -1,0 +1,198 @@
+\documentclass[10pt, sigplan, preprint]{acmart}
+%% Rights management information.  This information is sent to you
+%% when you complete the rights form.  These commands have SAMPLE
+%% values in them; it is your responsibility as an author to replace
+%% the commands and values with those provided to you when you
+%% complete the rights form.
+%\setcopyright{acmcopyright}
+%\copyrightyear{2020}
+%\acmYear{2020}
+%\acmDOI{10.1145/TODO}
+
+
+%\acmJournal{PACMPL}
+% \acmVolume{37}
+% \acmNumber{4}
+% \acmArticle{111}
+% \acmMonth{8}
+
+\newenvironment{knitrout}{}{} % an empty environment to be redefined in TeX
+\usepackage{url}
+\usepackage{amsmath}
+\usepackage{listings}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{multirow}
+\usepackage{tabularx}
+\usepackage{hhline}
+\setcopyright{none}
+
+\RequirePackage{xspace}
+
+\definecolor{gray}{rgb}{0.83, 0.83, 0.83}
+\definecolor{blue1dark}{RGB}{137, 175, 188}
+\definecolor{blue1medium}{RGB}{182, 214, 228}
+\definecolor{blue1light}{RGB}{224, 255, 255}
+
+\usepackage[utf8]{inputenc}
+\usepackage{titlesec}
+\usepackage[T1]{fontenc}
+
+\input{parsed_all_benchs_tables}
+
+\begin{document}
+
+\title{Ruby applications - Analysis of call-site behaviour}
+
+\author{Sophie Kaleba}
+\email{s.kaleba@kent.ac.uk}
+
+\maketitle
+
+%!TEX root = paper.tex
+This document aggregates the results for a given list of benchmarks
+
+\section{FOCUSING ON STANDARD METHOD CALLS}
+
+\section{General characteristics}
+
+\begin{table}[!h]
+	\caption{General deata about the benchamrks}
+	\centering
+	\tiny
+	\Metrics
+	\label{tab:metrics}
+	\end{table}
+
+\section{Call-site behaviour}
+
+This table shows the impact of call-site optimisations on the size of the biggest lookup cache.
+Each column represents the size of the biggest lookup cache, respectively before any optimisation, after eliminating duplicates ("TP"), and after applying splitting ("SPLIT").
+
+\subsection{Impact of eliminating target duplication}
+
+Appendix \ref{aftertp} lists the remaining polymorphic call-sites after this optimisation has been applied
+
+\subsubsection{\textbf{Impact on calls}}
+
+Amount of monomorphic, polymorphic and megamorphic calls before eliminating target duplication.
+Change. represents the change (in \%) of the number of calls per category, after eliminating target duplication.
+
+\begin{table}[!h]
+	\centering
+	\tiny
+	\AfterTPCalls
+	\caption{Eliminating target duplication: impact on calls}
+\end{table}
+
+\subsubsection{\textbf{Impact on call sites}}
+
+Amount of monomopphic, polymorphic and megamorphic call-sites before eliminating target duplication.
+Change. represents the change (in \%) of the number of call-sites per category, after eliminating target duplication.
+
+\begin{table}[h!]
+	\centering
+	\tiny
+	\AfterTPSites
+	\caption{Eliminating target duplication: impact on call-sites}
+\end{table}
+
+\subsection{Impact of splitting}
+After having eliminated target duplication
+Appendix \ref{aftersplitting} lists the remaining polymorphic call-sites after this optimisation has been applied
+
+\subsubsection{\textbf{Impact on calls}}
+
+Amount of monomorphic, polymorphic and megamorphic calls before splitting, but after having eliminated target duplicates.
+Change. represents the change (in \%) of the number of calls per category, after applying splitting.
+
+\begin{table}[h!]
+	\centering	
+	\tiny
+	\AfterSplitCalls
+	\caption{Splitting: impact on calls}
+\end{table}
+
+\subsubsection{\textbf{Impact on call sites}}
+
+Table \ref{after_split_call_site} represents the amount of monomorphic, polymorphic and megamorphic call-sites before splitting, but after having eliminated target duplicates.
+Change. represents the change (in \%) of the number of call-sites per category, after applying splitting.
+
+\begin{table}[h!]
+	\centering
+	\tiny
+	\AfterSplitSites
+	\caption{Splitting: impact on call-sites}
+	\label{after_split_call_site}
+\end{table}
+
+\section{Detailed summary of splitting behaviour}
+
+Table \ref{transitions} displays the different splitting transitions that occurred. They mention the state of the lookup cache before and after splitting. The number corresponds to the number of splits.
+
+\begin{table}[h!]
+	\centering
+	\tiny
+	\SplittingTransitions
+	\caption{The different splitting transitions}
+	\label{transitions}
+\end{table}
+
+\section{FOCUSING ON BLOCKS}
+
+\section{Call-site behaviour}
+
+This table shows the impact of call-site optimisations on the size of the biggest lookup cache.
+Each column represents the size of the biggest lookup cache, respectively before any optimisation and after applying splitting ("SPLIT").
+
+\begin{table}[h!]
+	\centering
+	\tiny
+	\BlockExtent
+	\caption{[Blocks] Impact of call-site optimisations on the maximum number of different targets in cache}
+\end{table}
+
+\subsection{Impact of splitting}
+
+\subsubsection{\textbf{Impact on calls}}
+
+Amount of monomorphic, polymorphic and megamorphic calls before splitting, but after having eliminated target duplicates.
+Change. represents the change (in \%) of the number of calls per category, after applying splitting.
+
+\begin{table}[h!]
+	\centering
+	\tiny
+	\BlockAfterSplitCallsMini
+	\caption{[Blocks] Splitting: impact on calls}
+\end{table}
+
+\subsubsection{\textbf{Impact on call sites}}
+
+Table \ref{blocks_after_split_call_site} represents the amount of monomorphic, polymorphic and megamorphic call-sites before splitting, but after having eliminated target duplicates.
+Change. represents the change (in \%) of the number of call-sites per category, after applying splitting.
+
+\begin{table}[h!]
+	\centering
+	\tiny
+	\BlockAfterSplitSites
+	\caption{[Blocks] Splitting: impact on call-sites}
+	\label{blocks_after_split_call_site}
+\end{table}
+
+\section{Detailed summary of splitting behaviour}
+
+Table \ref{blocks_transitions} displays the different splitting transitions that occurred. They mention the state of the lookup cache before and after splitting. The number corresponds to the number of splits.
+
+\begin{table}[h!]
+	\centering
+	\tiny
+	\BlockSplittingTransitions
+	\caption{[Blocks] The different splitting transitions}
+	\label{blocks_transitions}
+\end{table}
+
+\end{document}
+\endinput
+%%
+%% End of file `sample-acmsmall.tex'.
+
