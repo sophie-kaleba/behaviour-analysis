@@ -12,6 +12,12 @@ keep_blocks = as.logical(args[5])
 # folder_out = "../results/latest"
 # filename = "../results/latest/parsed_DeltaBlue.log"
 
+# keep_startup = TRUE
+# keep_blocks = FALSE
+# benchmark_name = "Acid"
+# folder_out = "../results/11-08-22_18-49-42/Acid/"
+# filename = "../results/11-08-22_18-49-42/Acid/parsed_Acid.log"
+
 col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver")
 data <- fread(filename, header = FALSE, sep="\t", col.names = col_names)
 data$Benchmark <- benchmark_name
@@ -74,9 +80,9 @@ table_optimizable[, Rank := 1:.N]
 plot_calls <- function(ss, symb) {
   filtered_data <- data %>% filter(Source.Section == ss & Symbol == symb)
   split_callSite <- strsplit(ss, "/", fixed=TRUE)
-  p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, color=Observed.Receiver)) + geom_point(size = 2, alpha = 0.4) 
-  p <- p + xlab("Call ID") + ylab("Target")  + ggtitle(paste(filtered_data$Symbol, ", in ", tail(split_callSite[[1]], 1)))
-  p <- p  + theme_bw() + theme(legend.position = "none")+ theme(text = element_text(size=40))
+  p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, color=Observed.Receiver)) + geom_point(size = 5, alpha = 0.7)
+  p <- p + xlab("Time (Call ID)") + ggtitle(paste(filtered_data$Symbol, ", in ", tail(split_callSite[[1]], 1)))
+  p <- p  + theme_bw() + theme(legend.position = "none")+ theme(text = element_text(size=30), axis.title.y=element_blank())
   p <- p + geom_vline(xintercept = as.numeric(as.character(first_user)))
  return (p)
 }
@@ -88,7 +94,7 @@ f <- function(row) {
   p_ <- plot_calls(ss, symbol)
   ss <- gsub("*/","_",ss) # replace the / in the name otherwise the file cannot be created
   ss <- str_trunc(ss, 25, side='left')
-  ggsave(p_, path=folder_out, filename=paste(rank,ss,symbol,"plot.png", sep="_"), height = 300, width = 500, units="mm")
+  ggsave(p_, path=folder_out, filename=paste(rank,ss,symbol,"plot.png", sep="_"), height = 150, width = 400, units="mm")
 }
 
 # 1 line in the table_optimizable corresponds to the most executed observed receiver per target
