@@ -1,0 +1,108 @@
+%!TEX root = paper.tex
+<<knitr-load, echo=FALSE, include=FALSE>>=
+  if (Sys.getenv("RSTUDIO") == "1") {
+    setwd("/home/sopi/Documents/Side_projects/ruby-cs-analyser/behaviour-analysis/")
+  } else {
+    opts_chunk$set(
+      fig.path="./figure/",
+      fig.keep='all',
+      dev=c('tikz'), #dev='pdf',c('tikz', 'svg'),
+      dev.args=list(pointsize=8, timestamp = FALSE),
+      echo=FALSE,
+      external=FALSE,
+      tidy=FALSE)
+    
+    ## Make sure that TikZDevice is used for measuring size of latex labels
+    options(device = function(...) tikzDevice::tikz(tempfile(), ...))
+  }
+
+source("./scripts/libraries.R", chdir=TRUE)
+source("./scripts/merge.R", chdir=TRUE)
+
+folder_status <- "../results/11-08-22_18-49-42/"
+folder_path = "Methods"
+folder_blocks = "Blocks"
+
+# Behaviour data - General
+
+data_nos <- load_all_tables(folder_status, folder_pattern = file.path(folder_path,"NoStartup", "Details"), patt="before") %>% replace(is.na(.), 0)
+names(data_nos) <- sub('(\\D+)(\\d+$)', '\\2_\\1', names(data_nos))
+
+data <- load_all_tables(folder_status, folder_pattern = file.path(folder_path,"Details"), patt="before") %>% replace(is.na(.), 0)
+names(data) <- sub('(\\D+)(\\d+$)', '\\2_\\1', names(data))
+
+# have a list of receivers for each call-site
+data <- data %>%
+  group_by(Benchmark, Source.Section, Symbol) %>%
+  mutate(Original.Receiver = list(unique(Original.Receiver)))
+
+data <- unique(data, by=c("Source.Section", "Symbol", "Original.Receiver"))
+
+data_nos <- data_nos %>%
+  group_by(Benchmark, Source.Section, Symbol) %>%
+  mutate(Original.Receiver = list(unique(Original.Receiver))) %>%
+  select(-Cache.Type, -Before.Num.Targets)
+
+data_nos <- unique(data_nos, by=c("Source.Section", "Symbol", "Original.Receiver")) %>% rename_with( ~ paste0("NOS_", .x), .cols = c("Original.Receiver"))
+# 
+# data <- data %>%
+#   merge(data_nos, by=c("Benchmark", "Source.Section", "Symbol")) %>%
+#   mutate(Diff.Receiver = (Original.Receiver %in% NOS_Original.Receiver)) %>%
+#   filter(Diff.Receiver == FALSE)
+# 
+setdiff(c("A", "B"), c("A", "C"))
+setdiff(c("A", "B"), c("A", "B", "D"))
+c("A", "D") %in% c("A", "B", "D")
+"A" %in% c("A", "B")
+############################################################################################# 
+filename_bounce = "/home/sopi/Documents/Side_projects/ruby-cs-analyser/results/11-08-22_18-49-42/Bounce/parsed_Bounce.log"
+keep_startup = TRUE
+keep_blocks = FALSE
+
+col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver")
+data_bounce <- fread(filename_bounce, header = FALSE, sep="\t", col.names = col_names)
+benchmark_name <- str_match(filename_bounce, "parsed\\_(.*?)\\.log")[2]
+data_bounce$Benchmark <- benchmark_name
+
+if (!keep_startup) {
+  data_bounce <- data_bounce[!(`Stage` %like% "STARTUP")] #remove startup data
+}
+
+if(!keep_blocks) {
+  data_bounce <- data_bounce[!(`Builtin?` %like% "PROC|LAMBDA|block")] #remove block data
+} else {
+  data_bounce <- data_bounce[`Builtin?` %like% "PROC|LAMBDA|block"]
+}
+
+data_bounce <- data_bounce[(`Stage` %like% "STARTUP")] #keep_only_startup
+data_bounce <- data_bounce[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim)]
+data_bounce[ , 
+      `:=`(Num.Receiver.Observed = n_distinct(Observed.Receiver), 
+       Num.Receiver.Original = n_distinct(Original.Receiver)), by=list(Source.Section, Symbol, Benchmark)]
+setnames(data_bounce,"Num.Receiver.Original", "Before.Num.Targets")
+setnames(data_bounce,"Num.Receiver.Observed", "TP.Num.Targets")
+data_bounce[ , "Split.Num.Targets" := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, CT.Address, Benchmark)]
+data_bounce[ , "Times.Splitted" := (n_distinct(CT.Address) - 1), by=list(Source.Section, Symbol)]
+
+table_two_before <- dt_generate_table_two(data_bounce, Observed.Receiver, Original.Receiver, c("Source.Section", "Symbol"), Before.Num.Targets)
+table_two_before <- table_two_before %>%
+  group_by(Benchmark, Source.Section, Symbol) %>%
+  mutate(Original.Receiver = list(unique(Original.Receiver)))
+
+table_two_before <- unique(table_two_before, by=c("Source.Section", "Symbol", "Original.Receiver")) %>%
+  rename_with( ~ paste0("SU_", .x), .cols = c("Original.Receiver")) %>% 
+  ungroup()
+
+data_nos <- data_nos %>%
+  merge(table_two_before %>% select(-Benchmark), by=c("Source.Section", "Symbol")) %>%
+  group_by(Benchmark, Source.Section, Symbol, SU_Original.Receiver) %>%
+  rowwise() %>%
+  dplyr::mutate(Diff.Receiver = length(setdiff(SU_Original.Receiver, NOS_Original.Receiver))) %>%
+  filter(Diff.Receiver != 0)
+
+all_impected <- unique(data_nos$Benchmark)
+
+data <- data %>%
+  merge(table_two_before %>% select(-Benchmark), by=c("Source.Section", "Symbol")) %>%
+  group_by(Benchmark, Source.Section, Symbol) %>%
+  mutate(Diff.Receiver = setdiff(SU_Original.Receiver, Original.Receiver)) 
