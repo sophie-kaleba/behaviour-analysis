@@ -80,47 +80,44 @@ sum_poly <- function(df) {
   return(df %>% dplyr::mutate(across(!Benchmark, as.numeric)))
 }
 
-# Here we'll collapse together: all the PSDUtil, PSDImage, PSDCompose and ChunkyColor
-combine_similar_benchmarks <- function(df, benchmarks, cluster=TRUE) {
-  for (bench in benchmarks) {
-      table_mean <- df %>%
-        filter(str_detect(Benchmark, bench)) %>%
-        dplyr::mutate(across(!c(Benchmark), as.numeric)) %>%
-        dplyr::summarise(across(where(is.numeric), mean)) %>%
-        dplyr::mutate_if(is.numeric, round, 0) %>%
-        as.data.frame()
-    row.names(table_mean) <- "Mean"
-    
-    if (cluster) {
-      cluster_aux <- df %>%
-        filter(str_detect(Benchmark, bench)) %>%
-        select(Cluster.Type)
-      cluster_type <- unique(unlist(cluster_aux))
-      table_mean$Cluster.Type <- cluster_type
-    }
-    
-    table_mean$Benchmark <- paste(bench,"*", sep="")
-    row.names(table_mean) <- NULL
-    
-    df <- df %>% 
-      filter(!str_detect(Benchmark, bench))
-      
-    df <- rbind(df, table_mean)
-  } 
-  
-
-  return(df %>% dplyr::arrange(Benchmark))
+apply_k_columns <- function(df, col_vec) {
+  for (col in col_vec) {
+    df[[col]] <- round(df[[col]]/1000, 0)
+  }
+  return(df)
 }
 
-# number of benchmarks
-# number of benchmarks in each category
-# lowest fn cov
-# highest fn cov
-# % of monomoprhic call-sites
-# lowest change poly calls tp
-# highest change poly calls tp
-generate_macros <- function(df) {
+# Here we'll collapse together: all the PSDUtil, PSDImage, PSDCompose and ChunkyColor
+combine_similar_benchmarks <- function(df, benchmarks, cluster=TRUE) {
+    for (bench in benchmarks) {
+      if (bench %in% df$Benchmark) {
+        table_mean <- df %>%
+          filter(str_detect(Benchmark, bench)) %>%
+          dplyr::mutate(across(!c(Benchmark), as.numeric)) %>%
+          dplyr::summarise(across(where(is.numeric), mean)) %>%
+          dplyr::mutate_if(is.numeric, round, 0) %>%
+          as.data.frame()
+      row.names(table_mean) <- "Mean"
+      
+      if (cluster) {
+        cluster_aux <- df %>%
+          filter(str_detect(Benchmark, bench)) %>%
+          select(Cluster.Type)
+        cluster_type <- unique(unlist(cluster_aux))
+        table_mean$Cluster.Type <- cluster_type
+      }
+      
+      table_mean$Benchmark <- paste(bench,"*", sep="")
+      row.names(table_mean) <- NULL
+      
+      df <- df %>% 
+        filter(!str_detect(Benchmark, bench))
+        
+      df <- rbind(df, table_mean)
+      }
+    }
 
+  return(df %>% dplyr::arrange(Benchmark))
 }
 
 
