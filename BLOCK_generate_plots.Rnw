@@ -8,11 +8,7 @@ filename = args[3]
 keep_startup = as.logical(args[4])
 keep_blocks = as.logical(args[5])
 
-# benchmark_name = "DeltaBlue"
-# folder_out = "../results/latest"
-# filename = "../results/latest/parsed_DeltaBlue.log"
-
-col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver")
+col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver", "Call.Site.ID")
 data <- fread(filename, header = FALSE, sep="\t", col.names = col_names)
 data$Benchmark <- benchmark_name
 
@@ -26,6 +22,7 @@ if(!keep_blocks) {
   stop("The file should contain only blocks")
 } else {
   data <- data[`Builtin?` %like% "PROC|LAMBDA|block"]
+  data$Call.Site.ID <- -1
 }
 
 data <- data[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim)]
@@ -35,12 +32,12 @@ first_user <- first_user$Call.ID
 
 gc()
 
-data[ , Num.Receiver.Original := n_distinct(Original.Receiver), by=list(Source.Section, Symbol, Benchmark)]
+data[ , Num.Receiver.Original := n_distinct(Original.Receiver), by=list(Source.Section, Symbol, Call.Site.ID, Benchmark)]
 
 data[ , 
-      `:=`(Split.Num.Receiver.Observed = n_distinct(Observed.Receiver)), by=list(Source.Section, Symbol, CT.Address, Benchmark)]
+      `:=`(Split.Num.Receiver.Observed = n_distinct(Observed.Receiver)), by=list(Source.Section, Symbol, Call.Site.ID, CT.Address, Benchmark)]
 
-data[ , "Times.Splitted" := (n_distinct(CT.Address) - 1), by=list(Source.Section, Symbol)]
+data[ , "Times.Splitted" := (n_distinct(CT.Address) - 1), by=list(Source.Section, Symbol, Call.Site.ID)]
 
 data[ , "Lookup.Status" := (fcase(
   (Num.Receiver.Original == 1), "MONO",
@@ -55,11 +52,11 @@ data[ , "Split.Lookup.Status" := (fcase(
 ############################################## MANUAL INSPECTION ############################################## 
 
   # to filter out by the number of targets and only keep polymoprhic call-sites
-data[ , "N.Calls" := uniqueN(.SD) , by = list(Source.Section, Symbol, Observed.Receiver)]
+data[ , "N.Calls" := uniqueN(.SD) , by = list(Source.Section, Symbol, Call.Site.ID, Observed.Receiver)]
 data_plot <- data[Lookup.Status != "MONO"]
 setorderv(data_plot, c("N.Calls"), order=-1L)
 
-table_optimizable <- unique(data_plot, by = c("Source.Section", "Symbol") )
+table_optimizable <- unique(data_plot, by = c("Source.Section", "Symbol", "Call.Site.ID") )
 table_optimizable[, Rank := 1:.N]
 
 ############################################## PLOT GENERATION - FACET ##############################################
@@ -68,8 +65,8 @@ if (!dir.exists(folder_out)) {
 }
 
 # this generates a faceted plot, each facet being the target adress(es), for a couple {Source.Section, symbol}
-plot_calls <- function(ss, symb) {
-  filtered_data <- data %>% filter(Source.Section == ss & Symbol == symb)
+plot_calls <- function(ss, symb, site) {
+  filtered_data <- data %>% filter(Source.Section == ss & Symbol == symb & Call.Site.ID == site)
   split_callSite <- strsplit(ss, "/", fixed=TRUE)
   p <- ggplot(data = filtered_data, aes(x=as.numeric(as.character(Call.ID)), y=Observed.Receiver, color=Observed.Receiver)) + geom_point(size = 2, alpha = 0.4) 
   p <- p + xlab("Call ID") + ylab("Target")  + ggtitle(paste(filtered_data$Symbol, ", in ", tail(split_callSite[[1]], 1)))
@@ -81,8 +78,9 @@ plot_calls <- function(ss, symb) {
 f <- function(row) {
   ss <- row['Source.Section']
   symbol <- row['Symbol']
+  site <- row['Call.Site.ID']
   rank <- row['Rank'] # prefix the plot name by the rank for an easier analysis
-  p_ <- plot_calls(ss, symbol)
+  p_ <- plot_calls(ss, symbol, site)
   ss <- gsub("*/","_",ss) # replace the / in the name otherwise the file cannot be created
   ss <- str_trunc(ss, 25, side='left')
   ggsave(p_, path=folder_out, filename=paste(rank,"BLOCK",ss,symbol,"plot.png", sep="_"), height = 300, width = 500, units="mm")
@@ -104,17 +102,17 @@ if (!dir.exists(split_lifetime_folder)) {
 data_split <- data[Times.Splitted > 0 ]
 setorderv(data_split, c("N.Calls", "Times.Splitted"), order=-1L)
 
-data_split <- data_split[ , .(Observed.Receiver = list(unique(Observed.Receiver)), Call.ID), by = list(Source.Section, Symbol, CT.Address)]
+data_split <- data_split[ , .(Observed.Receiver = list(unique(Observed.Receiver)), Call.ID), by = list(Source.Section, Symbol, Call.Site.ID, CT.Address)]
 setnames(data_split, "Observed.Receiver", "Signature") 
 
-table_optimizable_split <- unique(data_split, by = c("Source.Section", "Symbol") )
+table_optimizable_split <- unique(data_split, by = c("Source.Section", "Symbol", "Call.Site.ID") )
 table_optimizable_split[, Rank := 1:.N]
 
 # One plot per call-site, where each y variable is an CT Address
 # this generates a faceted plot, each facet being the target adress(es), for a couple {Source.Section, symbol}
 
-split_lifetime <- function(ss, symb) {
-  filtered_data <- data_split[Source.Section == ss & Symbol == symb]
+split_lifetime <- function(ss, symb, site) {
+  filtered_data <- data_split[Source.Section == ss & Symbol == symb & Call.Site.ID == site]
   filtered_data$CT.Address.num = as.numeric(as.character(filtered_data$CT.Address))
   filtered_data$CT.Address_ord <- factor(filtered_data$CT.Address.num, levels = sort(unique(filtered_data$CT.Address.num)), ordered = TRUE )
   
@@ -135,8 +133,9 @@ split_lifetime <- function(ss, symb) {
 f <- function(row) {
   ss <- row['Source.Section']
   symbol <- row['Symbol']
+  site <- row['Call.Site.ID']
   rank <- row['Rank'] # prefix the plot name by the rank for an easier analysis
-  p_ <- split_lifetime(ss, symbol)
+  p_ <- split_lifetime(ss, symbol, site)
   ss <- gsub("*/","_",ss) # replace the / in the name otherwise the file cannot be created
   ss <- str_trunc(ss, 25, side='left')
   ggsave(p_, path=split_lifetime_folder, filename=paste(rank,"BLOCK","splitlifetime",ss,symbol,"plot.png", sep="_"), height = 300, width = 500, units="mm")
