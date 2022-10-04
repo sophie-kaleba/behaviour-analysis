@@ -23,22 +23,20 @@ source("./scripts/merge.R", chdir=TRUE)
 coverage_data <- load_all_tables(folder_status, FALSE, folder_pattern="Coverage", patt="global") 
 colnames(coverage_data) <- c("Benchmark", "Stmt.Cov", "Num.Stmt", "Fn.Cov", "Num.Fn")
 
-coverage_data <- rename_benchs(coverage_data, benchs_small_names)
+coverage_data <- rename_benchs(coverage_data, benchs_small_names) %>%
+  dplyr::mutate(Freq.Statement.Covered = round((Stmt.Cov / Num.Stmt)*100, 1), Num.Fn.Covered = round((Fn.Cov / Num.Fn)*100, 1))
 
-# coverage_data <- rename_benchs(coverage_data, benchs_small_names) %>% 
-#   dplyr::mutate(Freq.Statement.Covered = round((Stmt.Cov / Num.Stmt)*100, 1), Num.Fn.Covered = round((Fn.Cov / Num.Fn)*100, 1))
-# 
-# all_stmt <- sum(coverage_data$Num.Stmt)
-# stmt_cov <- sum(coverage_data$Stmt.Cov)
-# freq_cov <- round((stmt_cov / all_stmt)*100,0)
-# all_fn <- sum(coverage_data$Num.Fn)
-# fn_cov <- sum(coverage_data$Fn.Cov)
-# freq_fn_cov <- round((fn_cov / all_fn)*100,0)
-# 
-# coverage_data <- coverage_data %>%
-#   select(-Stmt.Cov, -Fn.Cov) %>%
-#   dplyr::rename("Stmt.Cov" = "Freq.Statement.Covered" , "Fn.Cov" = "Num.Fn.Covered") %>%
-#   select(Benchmark, Num.Stmt, Stmt.Cov, Num.Fn, Fn.Cov)
+all_stmt <- sum(coverage_data$Num.Stmt)
+stmt_cov <- sum(coverage_data$Stmt.Cov)
+freq_cov <- round((stmt_cov / all_stmt)*100,0)
+all_fn <- sum(coverage_data$Num.Fn)
+fn_cov <- sum(coverage_data$Fn.Cov)
+freq_fn_cov <- round((fn_cov / all_fn)*100,0)
+
+coverage_data <- coverage_data %>%
+  select(-Stmt.Cov, -Fn.Cov) %>%
+  dplyr::rename("Stmt.Cov" = "Freq.Statement.Covered" , "Fn.Cov" = "Num.Fn.Covered") %>%
+  select(Benchmark, Num.Stmt, Stmt.Cov, Num.Fn, Fn.Cov)
 
 # Behaviour data - General
 data <- load_all_tables(folder_status, folder_pattern = file.path(folder_path,"General"), patt="one") %>% replace(is.na(.), 0)
