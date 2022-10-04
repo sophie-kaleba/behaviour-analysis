@@ -1,19 +1,12 @@
 source("./scripts/libraries.R", chdir=TRUE)
 
-# args = commandArgs(trailingOnly=TRUE)
-# benchmark_name = args[1]
-# filename = args[2]
-# 
-# folder_out = args[3]
-# keep_startup = as.logical(args[4])
-# keep_blocks = as.logical(args[5])
+args = commandArgs(trailingOnly=TRUE)
+benchmark_name = args[1]
+filename = args[2]
 
-benchmark_name = "DeltaBlue"
-filename = "../results/04-10-22_11-04-53/DeltaBlue/parsed_DeltaBlue.log"
-
-folder_out = "/home/sopi/Documents/Side_projects/ruby-cs-analyser/results/04-10-22_11-04-53/DeltaBlue/"
-keep_startup = TRUE
-keep_blocks = FALSE
+folder_out = args[3]
+keep_startup = as.logical(args[4])
+keep_blocks = as.logical(args[5])
 
 col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver", "Call.Site.ID")
 data <- fread(filename, header = FALSE, sep="\t", col.names = col_names)

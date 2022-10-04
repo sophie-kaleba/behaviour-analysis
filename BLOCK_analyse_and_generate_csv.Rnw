@@ -13,6 +13,7 @@ data <- fread(filename, header = FALSE, sep="\t", col.names = col_names)
 benchmark_name <- str_match(filename, "parsed\\_(.*?)\\.log")[2]
 data$Benchmark <- benchmark_name
 data$Symbol <- "closure"
+data$Call.Site.ID <- -1
 
 if (!keep_startup) {
   data <- data[!(`Stage` %like% "STARTUP")] #remove startup data
