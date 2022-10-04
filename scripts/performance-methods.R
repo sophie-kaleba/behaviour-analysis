@@ -61,7 +61,7 @@ dt_analyse_splitting_transitions <- function(dt, benchmark_name) {
 dt_generate_table_two <- function(df, receiver_to_ditch, receveiver_to_keep, call_site_type, type_rec, keep_ct = NULL) {
   table_two <- df %>%
     select(-{{receiver_to_ditch}}, -Call.ID, -`Builtin?`) %>%
-    select(Benchmark, Source.Section, Symbol, {{receveiver_to_keep}}, all_of(keep_ct), {{type_rec}}) %>%
+    select(Benchmark, all_of(call_site_type), {{receveiver_to_keep}}, all_of(keep_ct), {{type_rec}}) %>%
     group_by_at(c(call_site_type, "Benchmark")) %>%
     dplyr::mutate(Cache.Type = case_when({{type_rec}} == 1 ~ "MONO",
                                          {{type_rec}} > 1 & {{type_rec}} <= 8 ~ "POLY",
