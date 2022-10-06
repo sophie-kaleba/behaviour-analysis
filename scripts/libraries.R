@@ -30,6 +30,7 @@ load_and_install_if_necessary("assertr")
 load_and_install_if_necessary("R.utils")
 load_and_install_if_necessary("networkD3")
 load_and_install_if_necessary("janitor")
+load_and_install_if_necessary('beanplot')
 
 if (!suppressPackageStartupMessages(library("data.table", character.only=TRUE, logical.return=TRUE))) {
   cat(paste0("Package ", "data.table", " not found. Will install it."))
@@ -48,6 +49,7 @@ source("behaviour-processing.R")
 source("target-polymorphism.R")
 source("splitting.R")
 source("performance-methods.R")
+source("distribution.R")
 
 is.empty <- function(x, mode=NULL,...){
   

@@ -168,6 +168,14 @@ table_two_before <- dt_generate_table_two(data, Observed.Receiver, Original.Rece
 table_two_tp <- dt_generate_table_two(data, Original.Receiver, Observed.Receiver, Call.Site, TP.Num.Targets) %>% filter(Cache.Type != "MONO")
 table_two_spliting <- dt_generate_table_two(data, Original.Receiver, Observed.Receiver, Call.Site.Target, Split.Num.Targets, "CT.Address") %>% filter(Cache.Type != "MONO")
 
+############################################## DISTRIBUTION ###############################################
+sum_bench <- build_summary_df(data$Before.Num.Targets, benchmark_name)
+
+distribution_plots_dynamic <- build_distribution_plots(data, c("Before.Num.Targets", "TP.Num.Targets", "Split.Num.Targets"))
+
+static_sites <- data %>% distinct(Source.Section, Symbol, Call.Site.ID, .keep_all = TRUE)
+distribution_plots_static <- build_distribution_plots(static_sites, c("Before.Num.Targets", "TP.Num.Targets", "Split.Num.Targets"))
+
 ############################################## SAVE AS CSV ###############################################
 dt_write_on_disk <- function(dt, name, path = "") {
   fwrite(dt, file.path(path,paste(benchmark_name,"-",name,".csv",sep="")), col.names = TRUE, row.names = FALSE, sep=" ")
@@ -186,15 +194,21 @@ if (!keep_startup) {
   if (!dir.exists(file.path(folder_out))) {dir.create(folder_out, recursive = TRUE)}
 }
 
-if (!dir.exists(file.path(folder_out,"General")) & !dir.exists(file.path(folder_out,"Details"))) {
+if (!dir.exists(file.path(folder_out,"General")) & !dir.exists(file.path(folder_out,"Details")) & !dir.exists(file.path(folder_out,"Distribution"))) {
   dir.create(file.path(folder_out,"General"), recursive = TRUE)
   dir.create(file.path(folder_out,"Details"), recursive = TRUE)
+  dir.create(file.path(folder_out,"Distribution"), recursive = TRUE)
 }
 
 dt_write_on_disk(table_one, "table_one", file.path(folder_out,"General"))
+dt_write_on_disk(sum_bench, "table_distribution", file.path(folder_out,"General"))
 dt_write_on_disk(transition_data, "split_transitions", file.path(folder_out,"General"))
 dt_write_on_disk(detailed_transition_data, "detailed_split_transitions", file.path(folder_out,"Details"))
 
 dt_write_on_disk(table_two_before, "table_two_before", file.path(folder_out,"Details"))
 dt_write_on_disk(table_two_tp, "table_two_tp", file.path(folder_out,"Details"))
 dt_write_on_disk(table_two_spliting, "table_two_splitting", file.path(folder_out,"Details"))
+
+for (p in distribution_plots_dynamic) {
+  # todo implement a function to save the plots in the distribution folder ~ or the plots folder, that would need to be created here and removed from the makefile
+}
