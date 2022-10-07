@@ -190,10 +190,6 @@ static_sites <- data %>% distinct(Source.Section, Symbol, Call.Site.ID, .keep_al
 distribution_plots_static <- build_distribution_plots(static_sites, metrics)
 
 ############################################## SAVE AS CSV ###############################################
-dt_write_on_disk <- function(dt, name, path = "") {
-  fwrite(dt, file.path(path,paste(benchmark_name,"-",name,".csv",sep="")), col.names = TRUE, row.names = FALSE, sep=" ")
-}
-
 if (keep_blocks) {
   folder_out <- file.path(folder_out,"Blocks")
   if (!dir.exists(file.path(folder_out))) {dir.create(folder_out, recursive = TRUE)}

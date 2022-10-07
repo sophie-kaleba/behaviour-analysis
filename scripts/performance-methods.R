@@ -70,3 +70,7 @@ dt_generate_table_two <- function(df, receiver_to_ditch, receveiver_to_keep, cal
     arrange(Source.Section, Symbol, {{receveiver_to_keep}}, {{type_rec}})
   return(table_two)
 }
+
+dt_write_on_disk <- function(dt, name, path = "") {
+  fwrite(dt, file.path(path,paste(benchmark_name,"-",name,".csv",sep="")), col.names = TRUE, row.names = FALSE, sep=" ")
+}
