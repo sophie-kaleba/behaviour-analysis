@@ -10,16 +10,20 @@ build_summary_df <- function(col, benchmark_name) {
 build_distribution_plots <- function(df, metrics) {
   plot_list <- list()
   
-  for (i in 1:length(metrics)) {
-    m <- metrics[[i]]
-    p <- ggplot(data, aes(x=Benchmark, y=.data[[m]])) + 
+  data_mod <- melt(df, id.vars='Benchmark', measure.vars=metrics)
+  p <- ggplot(data_mod, aes(x=Benchmark, y=value, color=variable)) + 
       geom_boxplot() + ylab("Number of targets per call-site") + ggtitle("Number of different targets per call-site - distribution")
-    plot_list[[i]] <- p
-  }
+    plot_list[[1]] <- p
+  #for (i in 1:length(metrics)) {
+  #  m <- metrics[[i]]
+    # p <- ggplot(data, aes(x=Benchmark, y=.data[[m]])) + 
+    #   geom_boxplot() + ylab("Number of targets per call-site") + ggtitle("Number of different targets per call-site - distribution")
+    # plot_list[[i]] <- p
+  #}
   
-  data_mod <- melt(df, id.vars='Benchmark', measure.vars=metrics) # collaspe together to have the 3 stages in one plot
+   # collaspe together to have the 3 stages in one plot
   violin <-ggplot(data_mod, aes(x=Benchmark, y=value, color=variable)) + geom_violin() +
     ylab("Number of targets per call-site") + ggtitle("Number of different targets per call-site - distribution")
-  plot_list[[length(metrics)+1]] <- violin
+  plot_list[[2]] <- violin
   return(plot_list)
 }

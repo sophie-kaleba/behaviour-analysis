@@ -201,7 +201,7 @@ if (!dir.exists(file.path(folder_out,"General")) & !dir.exists(file.path(folder_
 }
 
 dt_write_on_disk(table_one, "table_one", file.path(folder_out,"General"))
-dt_write_on_disk(sum_bench, "table_distribution", file.path(folder_out,"General"))
+dt_write_on_disk(sum_bench, "table_distribution", file.path(folder_out,"Distribution"))
 dt_write_on_disk(transition_data, "split_transitions", file.path(folder_out,"General"))
 dt_write_on_disk(detailed_transition_data, "detailed_split_transitions", file.path(folder_out,"Details"))
 
@@ -209,6 +209,8 @@ dt_write_on_disk(table_two_before, "table_two_before", file.path(folder_out,"Det
 dt_write_on_disk(table_two_tp, "table_two_tp", file.path(folder_out,"Details"))
 dt_write_on_disk(table_two_spliting, "table_two_splitting", file.path(folder_out,"Details"))
 
-for (p in distribution_plots_dynamic) {
-  # todo implement a function to save the plots in the distribution folder ~ or the plots folder, that would need to be created here and removed from the makefile
+plot_names <- c("boxplot_distrib", "violin_plot")
+for (i in 1:length(distribution_plots_dynamic)) {
+  ggsave(distribution_plots_dynamic[[i]], device="pdf", path=file.path(folder_out, "Distribution"), filename=paste("dynamic",plot_names[[i]],sep="_"), height = 150, width = 400, units="mm")
+  ggsave(distribution_plots_static[[i]], device="pdf", path=file.path(folder_out, "Distribution"), filename=paste("static",plot_names[[i]],sep="_"), height = 150, width = 400, units="mm")
 }
