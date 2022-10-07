@@ -21,6 +21,8 @@ if(!keep_blocks) {
   data <- data[!(`Builtin?` %like% "PROC|LAMBDA|block")] #remove block data
 } else {
   data <- data[`Builtin?` %like% "PROC|LAMBDA|block"]
+  data$Symbol <- "closure"
+  data$Call.Site.ID <- -1
 }
 
 data <- data[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim)]
@@ -42,7 +44,6 @@ gc()
 
 ############################################## SPLITTING ############################################## 
 split_table <- copy(data)
-#split_table[ , "Num.Calls.Target" := n_distinct(Call.ID), by=list(Source.Section, Symbol, Benchmark)] don't think we actually use it
 
 split_table[ , `:=`(Start.Time = first(Call.ID),
                     End.Time = last(Call.ID)), by = list(Benchmark, Source.Section, Symbol, Call.Site.ID, CT.Address) ]
@@ -141,12 +142,14 @@ table_one <- data[ , .("Before.Num.Call.Sites" = n_distinct(Source.Section, Symb
                         by = list(Benchmark, Before.Num.Targets)]
 table_one <- dcast(table_one, Benchmark ~ Before.Num.Targets, value.var = c("Before.Num.Calls", "Before.Num.Call.Sites"))
 
-tp_aux <- data[ , .("TP.Num.Calls" = n_distinct(Call.ID), 
-                    "TP.Num.Call.Sites" = n_distinct(Source.Section, Symbol, Call.Site.ID)),
-                by = list(Benchmark, TP.Num.Targets)]
-tp_aux <- dcast(tp_aux,  Benchmark ~ TP.Num.Targets, value.var = c("TP.Num.Calls", "TP.Num.Call.Sites"))
-                
-table_one <- table_one[tp_aux, on = "Benchmark"]
+if(!keep_blocks) {
+  tp_aux <- data[ , .("TP.Num.Calls" = n_distinct(Call.ID), 
+                      "TP.Num.Call.Sites" = n_distinct(Source.Section, Symbol, Call.Site.ID)),
+                  by = list(Benchmark, TP.Num.Targets)]
+  tp_aux <- dcast(tp_aux,  Benchmark ~ TP.Num.Targets, value.var = c("TP.Num.Calls", "TP.Num.Call.Sites"))
+                  
+  table_one <- table_one[tp_aux, on = "Benchmark"]
+}
 
 split_aux <- data[ , .(Split.Num.Calls = n_distinct(Call.ID), 
                        Split.Num.Call.Sites = n_distinct(Source.Section, Symbol, Call.Site.ID)), #This is weird - is this correct?
@@ -165,16 +168,26 @@ table_one <-  table_one[transition_data[, c("Benchmark","Times.Splitted")]]
 # In essence:
 # Benchmark Lexical.Location Symbol Cache.State Receivers 
 table_two_before <- dt_generate_table_two(data, Observed.Receiver, Original.Receiver, Call.Site, Before.Num.Targets) %>% filter(Cache.Type != "MONO")
+
+if(!keep_blocks) {
 table_two_tp <- dt_generate_table_two(data, Original.Receiver, Observed.Receiver, Call.Site, TP.Num.Targets) %>% filter(Cache.Type != "MONO")
+}
+
 table_two_spliting <- dt_generate_table_two(data, Original.Receiver, Observed.Receiver, Call.Site.Target, Split.Num.Targets, "CT.Address") %>% filter(Cache.Type != "MONO")
 
 ############################################## DISTRIBUTION ###############################################
 sum_bench <- build_summary_df(data$Before.Num.Targets, benchmark_name)
 
-distribution_plots_dynamic <- build_distribution_plots(data, c("Before.Num.Targets", "TP.Num.Targets", "Split.Num.Targets"))
+if(!keep_blocks) {
+  metrics <- c("Before.Num.Targets", "TP.Num.Targets", "Split.Num.Targets")
+  } else {
+  metrics <- c("Before.Num.Targets", "Split.Num.Targets")  
+  }
+
+distribution_plots_dynamic <- build_distribution_plots(data, metrics)
 
 static_sites <- data %>% distinct(Source.Section, Symbol, Call.Site.ID, .keep_all = TRUE)
-distribution_plots_static <- build_distribution_plots(static_sites, c("Before.Num.Targets", "TP.Num.Targets", "Split.Num.Targets"))
+distribution_plots_static <- build_distribution_plots(static_sites, metrics)
 
 ############################################## SAVE AS CSV ###############################################
 dt_write_on_disk <- function(dt, name, path = "") {
@@ -206,7 +219,7 @@ dt_write_on_disk(transition_data, "split_transitions", file.path(folder_out,"Gen
 dt_write_on_disk(detailed_transition_data, "detailed_split_transitions", file.path(folder_out,"Details"))
 
 dt_write_on_disk(table_two_before, "table_two_before", file.path(folder_out,"Details"))
-dt_write_on_disk(table_two_tp, "table_two_tp", file.path(folder_out,"Details"))
+if (!keep_blocks) {dt_write_on_disk(table_two_tp, "table_two_tp", file.path(folder_out,"Details"))}
 dt_write_on_disk(table_two_spliting, "table_two_splitting", file.path(folder_out,"Details"))
 
 plot_names <- c("boxplot_distrib", "violin_plot")
