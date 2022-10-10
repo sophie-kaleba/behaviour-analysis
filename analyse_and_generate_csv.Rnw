@@ -39,6 +39,8 @@ setnames(data,"Num.Receiver.Original", "Before.Num.Targets")
 setnames(data,"Num.Receiver.Observed", "TP.Num.Targets")
 data[ , "Split.Num.Targets" := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, Call.Site.ID, CT.Address, Benchmark)]
 data[ , "Times.Splitted" := (n_distinct(CT.Address) - 1), by=list(Source.Section, Symbol, Call.Site.ID)]
+data[ , "Sites.Per.Method" := n_distinct(Source.Section, Symbol, Call.Site.ID, Benchmark), by=list(Observed.Receiver, Symbol)]
+data[ , "Split.Sites.Per.Method" := n_distinct(Source.Section, Symbol, Call.Site.ID, CT.Address, Benchmark), by=list(Observed.Receiver, Symbol)]
 
 gc()
 
@@ -173,7 +175,27 @@ if(!keep_blocks) {
 table_two_tp <- dt_generate_table_two(data, Original.Receiver, Observed.Receiver, Call.Site, TP.Num.Targets) %>% filter(Cache.Type != "MONO")
 }
 
-table_two_spliting <- dt_generate_table_two(data, Original.Receiver, Observed.Receiver, Call.Site.Target, Split.Num.Targets, "CT.Address") %>% filter(Cache.Type != "MONO")
+table_two_spliting <- dt_generate_table_two(data, Original.Receiver, Observed.Receiver, Call.Site.Target, Split.Num.Targets, "CT.Address") %>% 
+                              filter(Cache.Type != "MONO")
+
+############################################## CALLER POLYMORPHISM ###############################################
+table_caller_polymorphism <- data[ , .(Num.Methods = n_distinct(Observed.Receiver, Symbol)), by = list(Benchmark, Sites.Per.Method)][, dcast(.SD, Benchmark ~ Sites.Per.Method,
+                                                                                                                           value.var = c("Num.Methods"))]
+table_caller_polymorphism_splitting <- data[ , .(Split.Num.Methods = n_distinct(Observed.Receiver, Symbol)), by = list(Benchmark, Split.Sites.Per.Method)][, dcast(.SD, Benchmark ~ Split.Sites.Per.Method,
+                                                                                                                                                       value.var = c("Split.Num.Methods"))]
+
+
+table_caller_polymorphism[ , "Total.Num.Methods" := rowSums(.SD), .SDcols=is.numeric] 
+table_caller_polymorphism_splitting[ , "Total.Num.Methods" := rowSums(.SD), .SDcols=is.numeric]
+table_caller_polymorphism_splitting[["Benchmark"]] <- paste(benchmark_name,"Split", sep=".")
+table_caller_polymorphism <- rbind(table_caller_polymorphism, table_caller_polymorphism_splitting, fill=TRUE)
+setcolorder(table_caller_polymorphism, gtools::mixedsort(names(table_caller_polymorphism)))
+table_caller_polymorphism <- table_caller_polymorphism %>% select(c("Benchmark", "Total.Num.Methods", everything()))
+
+detailed_table_caller_polymorphism <- data %>% 
+  filter(Sites.Per.Method >= 3 & Split.Sites.Per.Method >= 3) %>% 
+  select(Benchmark, Source.Section, Observed.Receiver, Symbol, Call.Site.ID, CT.Address, Sites.Per.Method, Split.Sites.Per.Method) %>%
+  distinct(Benchmark, Source.Section, Observed.Receiver, Symbol, Call.Site.ID, CT.Address, .keep_all = TRUE)
 
 ############################################## DISTRIBUTION ###############################################
 sum_bench <- build_summary_df(data$Before.Num.Targets, benchmark_name)
@@ -212,8 +234,10 @@ if (!dir.exists(file.path(folder_out,"General")) & !dir.exists(file.path(folder_
 dt_write_on_disk(table_one, "table_one", file.path(folder_out,"General"))
 dt_write_on_disk(sum_bench, "table_distribution", file.path(folder_out,"Distribution"))
 dt_write_on_disk(transition_data, "split_transitions", file.path(folder_out,"General"))
-dt_write_on_disk(detailed_transition_data, "detailed_split_transitions", file.path(folder_out,"Details"))
+dt_write_on_disk(table_caller_polymorphism, "caller_polymorphism", file.path(folder_out,"General"))
 
+dt_write_on_disk(detailed_table_caller_polymorphism, "detailed_table_caller_polymorphism", file.path(folder_out,"Details"))
+dt_write_on_disk(detailed_transition_data, "detailed_split_transitions", file.path(folder_out,"Details"))
 dt_write_on_disk(table_two_before, "table_two_before", file.path(folder_out,"Details"))
 if (!keep_blocks) {dt_write_on_disk(table_two_tp, "table_two_tp", file.path(folder_out,"Details"))}
 dt_write_on_disk(table_two_spliting, "table_two_splitting", file.path(folder_out,"Details"))
