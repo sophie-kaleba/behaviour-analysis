@@ -26,6 +26,7 @@
 \usepackage{multirow}
 \usepackage{tabularx}
 \usepackage{hhline}
+\usepackage{lscape}
 \setcopyright{none}
 
 \RequirePackage{xspace}
@@ -66,8 +67,16 @@
 
 \section{Call-site behaviour}
 
-This table shows the impact of call-site optimisations on the size of the biggest lookup cache.
+Table \ref{tab:metrics} shows the impact of call-site optimisations on the size of the biggest lookup cache.
 Each column represents the size of the biggest lookup cache, respectively before any optimisation, after eliminating duplicates ("TP"), and after applying splitting ("SPLIT").
+
+\begin{table}[!h]
+	\caption{Receiver distribution}
+	\centering
+	\tiny
+	\Distribution
+	\label{tab:distribution}
+\end{table}
 
 \subsection{Impact of eliminating target duplication}
 
@@ -142,7 +151,15 @@ Table \ref{transitions} displays the different splitting transitions that occurr
 
 \section{Call-site behaviour}
 
-This table shows the impact of call-site optimisations on the size of the biggest lookup cache.
+\begin{table}[!h]
+	\caption{Receiver distribution for blocks}
+	\centering
+	\tiny
+	\BlockDistribution
+	\label{tab:blockdistribution}
+\end{table}
+
+Following table \ref{tab:blockextent} shows the impact of call-site optimisations on the size of the biggest lookup cache.
 Each column represents the size of the biggest lookup cache, respectively before any optimisation and after applying splitting ("SPLIT").
 
 \begin{table}[h!]
@@ -150,6 +167,7 @@ Each column represents the size of the biggest lookup cache, respectively before
 	\tiny
 	\BlockExtent
 	\caption{[Blocks] Impact of call-site optimisations on the maximum number of different targets in cache}
+	\label{tab:blockextent}
 \end{table}
 
 \subsection{Impact of splitting}
@@ -191,8 +209,22 @@ Table \ref{blocks_transitions} displays the different splitting transitions that
 	\label{blocks_transitions}
 \end{table}
 
+\section{Caller polymorphism}
+
+Table \ref{caller_poly} displays the number of call-sites a method is called from. We can see that most methods (usually more than half of all methods called) are called from a single call-site.
+
+\begin{landscape}
+\begin{table}[h!]
+	\centering
+	\tiny
+	\resizebox{1.5\textwidth}{!}{
+	\CallerPolymorphism
+	}
+	\caption{Caller polymorphism}
+	\label{caller_poly}
+\end{table}
+\end{landscape}
+
 \end{document}
 \endinput
-%%
-%% End of file `sample-acmsmall.tex'.
 

@@ -21,7 +21,11 @@ def main(argv):
                 old_header = fp.readline()
                 mid_rule = fp.readline()
 
-                fout.write(new_headers[current_header]+"\n")
+                if ("CallerPolymorphism" in new_headers[current_header]):
+                    tab_header = line.split("}{")
+                    fout.write(tab_header[0]+"}{\paperheight}{"+tab_header[1]+top_rule+old_header+mid_rule)
+                else:
+                    fout.write(new_headers[current_header]+"\n")
                 current_header += 1
             elif ("\\bottomrule" in line) :
                 fout.write("\hline")
@@ -30,9 +34,6 @@ def main(argv):
 
         fout.close()
         f_new_headers.close()
-
-def should_remove(e):
-    return (e.startswith('%') or (e == ""))
 
 if __name__ == "__main__":
     main(sys.argv)

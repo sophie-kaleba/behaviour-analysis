@@ -43,6 +43,13 @@ data <- load_all_tables(folder_status, folder_pattern = file.path(folder_path,"G
 data <- join(coverage_data, data) %>% select(c("Benchmark", "Times.Splitted"), everything())
 names(data) <- sub('(\\D+)(\\d+$)', '\\2_\\1', names(data))
 
+# Behaviour data - Distribution
+table_distrib <- load_all_tables(folder_status, folder_pattern = file.path(folder_path,"Distribution"), patt="distribution") %>% replace(is.na(.), 0)
+
+# Behaviour data - Caller polymorphism
+table_caller_polymorphism <- load_all_tables(folder_status, folder_pattern = file.path(folder_path,"General"), patt="polymorphism") %>% replace(is.na(.), 0)
+table_caller_polymorphism <- table_caller_polymorphism[ , gtools::mixedsort(names(table_caller_polymorphism))] %>% select(c("Benchmark", "Total.Num.Methods", everything()))
+
 # Behaviour data - Splitting transitions
 table_split_transitions <- load_all_tables(folder_status, folder_pattern = file.path(folder_path,"General") , patt="split")
 
@@ -212,9 +219,6 @@ table_one <- table_one %>%
   dplyr::arrange(Cluster.Type, Benchmark)
 table_one_copy <- copy(table_one)
 
-table_one_latex <- kableExtra::kable(table_one %>% select(-Max.Target, -Mono.Call.Sites, -Mono.Calls, -Poly.Call.Sites, -Poly.Calls, -Mega.Call.Sites, -Mega.Calls, -Cluster.Type), booktabs = TRUE, align = "r", escape = TRUE, linesep=c("")) %>%
-  cluster_styling(table_one_copy)
-
 table_two_aftertp <- table_two_aftertp %>% 
   combine_similar_benchmarks(c("PsdUtil","PsdCompose","PsdImage","ChunkyCanvas","ChunkyColor")) %>% 
   apply_big_numbers(c("Mono.Calls", "Mono.Call.Sites", "Poly.Calls", "Poly.Call.Sites", "Mega.Calls", "Mega.Call.Sites")) %>%
@@ -222,12 +226,6 @@ table_two_aftertp <- table_two_aftertp %>%
   add_percent(c("Change.Poly.Sites", "Change.Mega.Sites", "Change.Poly.Calls", "Change.Mega.Calls")) %>% 
   dplyr::arrange(Cluster.Type, Benchmark)
 table_two_aftertp_copy <- copy(table_two_aftertp)
-
-table_two_sites_latex <- kableExtra::kable(table_two_aftertp %>% select(-Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Calls"), -contains("TP"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c(""))  %>%
-  cluster_styling(table_two_aftertp_copy)
-
-table_two_calls_latex <- kableExtra::kable(table_two_aftertp %>% select(-Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Sites"), -contains("TP"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
-  cluster_styling(table_two_aftertp_copy)
 
 table_three_aftersplit <- table_three_aftersplit %>%
   merge(table_split_transitions %>% select(Benchmark, Times.Splitted), by="Benchmark") %>%
@@ -238,19 +236,10 @@ table_three_aftersplit <- table_three_aftersplit %>%
   dplyr::arrange(Cluster.Type, Benchmark)
 table_three_aftersplit_copy <- copy(table_three_aftersplit)
 
-table_three_sites_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Calls"), -contains("SPLIT"), -Cluster.Type, Times.Splitted), booktabs = TRUE, align = "r", linesep=c("")) %>% 
-  cluster_styling(table_three_aftersplit_copy)
-
-table_three_calls_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Sites"), -contains("SPLIT"), -Cluster.Type, Times.Splitted), booktabs = TRUE, align = "r", linesep=c("")) %>% 
-  cluster_styling(table_three_aftersplit_copy)
-
 table_four_max <- table_four_max %>%
   combine_similar_benchmarks(c("PsdUtil","PsdCompose","PsdImage","ChunkyCanvas","ChunkyColor")) %>% 
   dplyr::arrange(Cluster.Type, Benchmark)
 table_four_max_copy <- copy(table_four_max)
-
-table_four_latex <- kableExtra::kable(table_four_max %>% filter (Cluster.Type != "Polymorphic.Small") %>% select(-Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
-  cluster_styling(table_four_max_copy)
 
 table_split_transitions <- table_split_transitions %>%
   merge(benchmark_types, by="Benchmark") %>%
@@ -259,9 +248,32 @@ table_split_transitions <- table_split_transitions %>%
   add_percent(c("MONO->MONO (!=)", "MONO->MONO (=)"))
 table_split_transitions_copy <- copy(table_split_transitions)
 
+table_one_latex <- kableExtra::kable(table_one %>% select(-Max.Target, -Mono.Call.Sites, -Mono.Calls, -Poly.Call.Sites, -Poly.Calls, -Mega.Call.Sites, -Mega.Calls, -Cluster.Type), booktabs = TRUE, align = "r", escape = TRUE, linesep=c("")) %>%
+  cluster_styling(table_one_copy)
+
+table_two_sites_latex <- kableExtra::kable(table_two_aftertp %>% select(-Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Calls"), -contains("TP"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c(""))  %>%
+  cluster_styling(table_two_aftertp_copy)
+
+table_two_calls_latex <- kableExtra::kable(table_two_aftertp %>% select(-Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Sites"), -contains("TP"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
+  cluster_styling(table_two_aftertp_copy)
+
+table_three_sites_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Calls"), -contains("SPLIT"), -Cluster.Type, Times.Splitted), booktabs = TRUE, align = "r", linesep=c("")) %>% 
+  cluster_styling(table_three_aftersplit_copy)
+
+table_three_calls_latex <- kableExtra::kable(table_three_aftersplit %>% select(-SPLIT_Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Sites"), -contains("SPLIT"), -Cluster.Type, Times.Splitted), booktabs = TRUE, align = "r", linesep=c("")) %>% 
+  cluster_styling(table_three_aftersplit_copy)
+
+table_four_latex <- kableExtra::kable(table_four_max %>% filter (Cluster.Type != "Polymorphic.Small") %>% select(-Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
+  cluster_styling(table_four_max_copy)
+
 table_split_transitions_latex <- kableExtra::kable(table_split_transitions %>% select(-Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
   cluster_styling(table_split_transitions_copy)
 
+table_distrib_latex <- kableExtra::kable(table_distrib %>% dplyr::select(Benchmark, everything()), booktabs = TRUE, align = "r", linesep=c("")) %>% kableExtra::kable_styling(latex_table_env="tabularx")
+
+table_caller_poly_latex <- kableExtra::kable(table_caller_polymorphism, booktabs = TRUE, align = "r", linesep=c("")) %>% kableExtra::kable_styling(latex_table_env="tabularx")
+
+# Shortened versions for article
 table_two_calls_latex_mini <- kableExtra::kable(table_two_aftertp %>% filter (Cluster.Type != "Polymorphic.Small") %>% select(-Max.Target, -TP_Max.Target, -contains("Mono"), -contains("Sites"), -contains("TP"), -Cluster.Type), booktabs = TRUE, align = "r", linesep=c("")) %>% 
   cluster_styling(table_two_aftertp_copy)
 
@@ -315,6 +327,8 @@ if (nrow(block_lowest_poly_freq) > 1) {
 
 ratio_block_meth <- round(num_methods / sum_blocks,0)
 
+block_table_distrib <- load_all_tables(folder_status, folder_pattern = file.path(folder_blocks,"Distribution") , patt="distribution")
+block_table_distrib_latex <- kableExtra::kable(block_table_distrib %>% dplyr::select(Benchmark, everything()), booktabs = TRUE, align = "r", linesep=c("")) %>% kableExtra::kable_styling(latex_table_env="tabularx")
 ############################################## BLOCKS - table extent ###############################################
 
 block_splitting <- block_data %>%
@@ -485,6 +499,23 @@ block_table_split_transitions_latex <- kableExtra::kable(block_table_split_trans
   @
 }%
 
+\def\Distribution{%
+  <<Distribution, echo=FALSE, results='asis'>>=
+    print(table_distrib_latex)
+  @
+}%
+
+\def\BlockDistribution{%
+  <<BlockDistribution, echo=FALSE, results='asis'>>=
+    print(block_table_distrib_latex)
+  @
+}%
+
+\def\CallerPolymorphism{%
+  <<CallerPolymorphism, echo=FALSE, results='asis'>>=
+    print(table_caller_poly_latex)
+  @
+}%
   
 \newcommand{\NumBenchmarks}{$\Sexpr{num_benchmarks}$\xspace}
 \newcommand{\MegaBenchs}{$\Sexpr{mega_benchs}$\xspace}
