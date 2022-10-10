@@ -1,6 +1,6 @@
 build_summary_df <- function(col, benchmark_name) {
   sum_bench <- as.data.frame(t(quantile(col, probs = c(0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1)))) %>%
-                  mutate("Mean" = mean(col), "Median" = median(col)) %>%
+                  mutate("Mean" = round(mean(col),0), "Median" = round(median(col),0)) %>%
                   mutate("Min"= min(col), "Max" = max(col)) %>%
                   mutate("Benchmark" = benchmark_name)
   return(sum_bench)
