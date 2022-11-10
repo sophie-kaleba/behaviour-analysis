@@ -29,6 +29,7 @@ public class CallSite {
             if (currentCallTarget.address == target.address)
             {
                 found = true;
+                currentCallTarget.receivers.addAll(target.receivers);
             }
         }
 

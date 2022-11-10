@@ -55,7 +55,7 @@ public class CallSiteAnalyzer {
                 site.sourceSection,
                 site.symbol,
                 Integer.toString(prev_ct.startID),
-                Integer.toString(prev_ct.endID),
+                Integer.toString(ct.endID),
                 prev_ct.type.toString(),
                 ct.type.toString(),
                 Integer.toString(prev_ct.numberReceivers()),
