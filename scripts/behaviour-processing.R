@@ -120,8 +120,8 @@ add_lookup_status_per_call <- function(df_p) {
 cluster_benchmarks <- function(df) {
   df <- df %>%
     dplyr::mutate(Cluster.Type = case_when(Mega.Call.Sites > 0 ~ "Megamorphic",
-                                          Poly.Call.Sites > 0 & Freq.Poly.Call.Sites >= 2.0  ~ "Polymorphic.Medium",
-                                          Mono.Call.Sites > 0 & Poly.Call.Sites > 0 & Freq.Poly.Call.Sites < 2.0 ~ "Polymorphic.Small"))
+                                          Poly.Call.Sites > 0 & Freq.Poly.Call.Sites >= 1.5  ~ "Polymorphic.Medium",
+                                          Mono.Call.Sites > 0 & Poly.Call.Sites > 0 & Freq.Poly.Call.Sites < 1.5 ~ "Polymorphic.Small"))
   return(df)
 }
 
