@@ -26,6 +26,9 @@ if(!keep_blocks) {
 }
 
 data <- data[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim)]
+#data <- data[, na.omit(.SD)][, lapply(.SD, str_trim)]
+#data$Call.ID <- as.numeric(data$Call.ID)
+#data <- data[order(Call.ID)]
 
 gc()
 
@@ -238,6 +241,8 @@ dt_write_on_disk(table_caller_polymorphism, "caller_polymorphism", file.path(fol
 
 dt_write_on_disk(detailed_table_caller_polymorphism, "detailed_table_caller_polymorphism", file.path(folder_out,"Details"))
 dt_write_on_disk(detailed_transition_data, "detailed_split_transitions", file.path(folder_out,"Details"))
+dt_write_on_disk(detailed_transition_data_same, "detailed_split_transitions_same", file.path(folder_out,"Details"))
+
 dt_write_on_disk(table_two_before, "table_two_before", file.path(folder_out,"Details"))
 if (!keep_blocks) {dt_write_on_disk(table_two_tp, "table_two_tp", file.path(folder_out,"Details"))}
 dt_write_on_disk(table_two_spliting, "table_two_splitting", file.path(folder_out,"Details"))
