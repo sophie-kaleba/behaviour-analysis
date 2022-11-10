@@ -52,6 +52,13 @@ add_percent <- function(df, list_of_col_names) {
   return (df)
 }
 
+add_percent_rounded <- function(df, list_of_col_names) {
+  for (col in list_of_col_names) {
+    df[[col]] <- paste(df[[col]], "%", sep = "")
+  }
+  return (df)
+}
+
 f0 = function(df) {
   idx = ifelse((df == 0), 0L, col(df))
   apply(idx, 1, max)
@@ -90,7 +97,7 @@ apply_k_columns <- function(df, col_vec) {
 # Here we'll collapse together: all the PSDUtil, PSDImage, PSDCompose and ChunkyColor
 combine_similar_benchmarks <- function(df, benchmarks, cluster=TRUE) {
     for (bench in benchmarks) {
-      if (bench %in% df$Benchmark) {
+      if (TRUE %in% (df$Benchmark %like% bench)) {
         table_mean <- df %>%
           filter(str_detect(Benchmark, bench)) %>%
           dplyr::mutate(across(!c(Benchmark), as.numeric)) %>%
