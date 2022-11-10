@@ -71,6 +71,6 @@ dt_generate_table_two <- function(df, receiver_to_ditch, receveiver_to_keep, cal
   return(table_two)
 }
 
-dt_write_on_disk <- function(dt, name, path = "") {
-  fwrite(dt, file.path(path,paste(benchmark_name,"-",name,".csv",sep="")), col.names = TRUE, row.names = FALSE, sep=" ")
+dt_write_on_disk <- function(dt, name, path = "", bench_name = benchmark_name) {
+  fwrite(dt, file.path(path,paste(bench_name,"-",name,".csv",sep="")), col.names = TRUE, row.names = FALSE, sep=" ")
 }
