@@ -8,7 +8,7 @@ folder_out = args[3]
 keep_startup = as.logical(args[4])
 keep_blocks = as.logical(args[5])
 
-col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver", "CT.ID")
+col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.ID", "Builtin?", "Observed.Receiver", "CT.Address")
 # old from the paper
 #col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver", "Call.Site.ID")
 data <- fread(filename, header = FALSE, sep="\t", col.names = col_names)
@@ -45,10 +45,10 @@ gc()
 
 setnames(data,"Num.Receiver.Original", "Before.Num.Targets")
 setnames(data,"Num.Receiver.Observed", "TP.Num.Targets")
-data[ , "Split.Num.Targets" := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, CT.ID, Benchmark)]
-data[ , "Times.Splitted" := (n_distinct(CT.ID) - 1), by=list(Source.Section, Symbol)]
+data[ , "Split.Num.Targets" := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, CT.Address, Benchmark)]
+data[ , "Times.Splitted" := (n_distinct(CT.Address) - 1), by=list(Source.Section, Symbol)]
 data[ , "Sites.Per.Method" := n_distinct(Source.Section, Symbol, Benchmark), by=list(Observed.Receiver, Symbol)]
-data[ , "Split.Sites.Per.Method" := n_distinct(Source.Section, Symbol, CT.ID, Benchmark), by=list(Observed.Receiver, Symbol)]
+data[ , "Split.Sites.Per.Method" := n_distinct(Source.Section, Symbol, CT.Address, Benchmark), by=list(Observed.Receiver, Symbol)]
 # old from the paper
 # data[ , "Split.Num.Targets" := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, Call.Site.ID, CT.Address, Benchmark)]
 # data[ , "Times.Splitted" := (n_distinct(CT.Address) - 1), by=list(Source.Section, Symbol, Call.Site.ID)]
@@ -61,12 +61,12 @@ gc()
 split_table <- copy(data)
 
 split_table[ , `:=`(Start.Time = first(Call.ID),
-                    End.Time = last(Call.ID)), by = list(Benchmark, Source.Section, Symbol, CT.ID) ]
+                    End.Time = last(Call.ID)), by = list(Benchmark, Source.Section, Symbol, CT.Address) ]
 
 split_table[, c("Builtin?", "TP.Num.Targets", "Before.Num.Targets", "Split.Num.Targets", "Times.Splitted", "Stage", "Original.Receiver", "Call.ID") := NULL]
-setcolorder(split_table, c("Benchmark", "Source.Section", "Symbol", "CT.ID", "Start.Time", "End.Time", "Observed.Receiver"))
+setcolorder(split_table, c("Benchmark", "Source.Section", "Symbol", "CT.Address", "Start.Time", "End.Time", "Observed.Receiver"))
 split_table <- unique(split_table)
-setorderv(split_table, c("Benchmark", "Source.Section", "Symbol", "CT.ID", "Start.Time"))
+setorderv(split_table, c("Benchmark", "Source.Section", "Symbol", "CT.Address", "Start.Time"))
 # old from the paper 
 # split_table[ , `:=`(Start.Time = first(Call.ID),
 #                     End.Time = last(Call.ID)), by = list(Benchmark, Source.Section, Symbol, Call.Site.ID, CT.Address) ]
@@ -91,67 +91,78 @@ system2("java", paste(" CallSiteAnalyzer",split_file, out_split_file, sep=" "))
 
 setwd(prev_wd)
 row_names <- c("Source.Section", "Symbol", "Start.ID", "End.ID", "Start.State", "End.State", "Start.Cache.Size", "End.Cache.Size", "Union.Size", "Intersect.Size", "Benchmark")
+
+options(warn=0)
 transition_data <- fread(out_split_file, header = FALSE, sep=",", col.names=row_names)
 # old from paper
 # row_names <- c("Source.Section", "Symbol", "Start.ID", "End.ID", "Start.State", "End.State", "Start.Cache.Size", "End.Cache.Size", "Union.Size", "Intersect.Size", "Benchmark", "Call.Site.ID")
 # transition_data <- fread(out_split_file, header = FALSE, sep=",", col.names=row_names)
 
-transition_data[ , "Transition.Type" := (fcase(
-  (Start.State == 'POLYMORPHIC' & End.State == 'POLYMORPHIC' & Intersect.Size == Union.Size), "Same",
-  (Start.State == 'MONOMORPHIC' & End.State == 'MONOMORPHIC' & Intersect.Size == Union.Size), "Same",
-  (Start.State == 'MEGAMORPHIC' & End.State == 'MEGAMORPHIC' & Intersect.Size == Union.Size), "Same",
-  default = "Different")
-)]
-
-
-detailed_transition_data <- transition_data[Transition.Type == "Different"][ , `:=`(Start.Cache.Size = NULL,
-                                                                                    End.Cache.Size = NULL,
-                                                                                    Union.Size = NULL,
-                                                                                    Intersect.Size = NULL)]
-
-detailed_transition_data_same <- transition_data[Transition.Type == "Same"][ , `:=`(Start.Cache.Size = NULL,
-                                                                                    End.Cache.Size = NULL,
-                                                                                    Union.Size = NULL,
-                                                                                    Intersect.Size = NULL)]
-
-# from there, the data get summarized
-transition_data <- transition_data[ , .("Num.Transitions" = n_distinct(Source.Section, Symbol)), by=list(Benchmark, Start.State, End.State, Transition.Type)]
-#transition_data <- transition_data[ , .("Num.Transitions" = n_distinct(Source.Section, Symbol, Call.Site.ID)), by=list(Benchmark, Start.State, End.State, Transition.Type)]
-
-transition_data <- transition_data %>% 
+if (!is.null(transition_data)) {
+  transition_data[ , "Transition.Type" := (fcase(
+    (Start.State == 'POLYMORPHIC' & End.State == 'POLYMORPHIC' & Intersect.Size == Union.Size), "Same",
+    (Start.State == 'MONOMORPHIC' & End.State == 'MONOMORPHIC' & Intersect.Size == Union.Size), "Same",
+    (Start.State == 'MEGAMORPHIC' & End.State == 'MEGAMORPHIC' & Intersect.Size == Union.Size), "Same",
+    default = "Different")
+  )]
+  
+  
+  detailed_transition_data <- transition_data[Transition.Type == "Different"][ , `:=`(Start.Cache.Size = NULL,
+                                                                                      End.Cache.Size = NULL,
+                                                                                      Union.Size = NULL,
+                                                                                      Intersect.Size = NULL)]
+  
+  detailed_transition_data_same <- transition_data[Transition.Type == "Same"][ , `:=`(Start.Cache.Size = NULL,
+                                                                                      End.Cache.Size = NULL,
+                                                                                      Union.Size = NULL,
+                                                                                      Intersect.Size = NULL)]
+  
+  # from there, the data get summarized
+  transition_data <- transition_data[ , .("Num.Transitions" = n_distinct(Source.Section, Symbol)), by=list(Benchmark, Start.State, End.State, Transition.Type)]
+  #transition_data <- transition_data[ , .("Num.Transitions" = n_distinct(Source.Section, Symbol, Call.Site.ID)), by=list(Benchmark, Start.State, End.State, Transition.Type)]
+  
+  transition_data <- transition_data %>% 
     tidyr::unite("Transition", Start.State:End.State, remove = TRUE, sep=" -> ") %>%
     tidyr::unite("Transition", Transition:Transition.Type, remove = TRUE, sep="_") %>%
     tidyr::spread(Benchmark, Num.Transitions)
-
-old_cols <- c("MONOMORPHIC -> MONOMORPHIC_Different",
-              "MONOMORPHIC -> MONOMORPHIC_Same",
-              "MONOMORPHIC -> POLYMORPHIC_Different",
-              "MONOMORPHIC -> MEGAMORPHIC_Different",
-              "POLYMORPHIC -> POLYMORPHIC_Different",
-              "POLYMORPHIC -> POLYMORPHIC_Same",
-              "POLYMORPHIC -> MONOMORPHIC_Different",
-              "POLYMORPHIC -> MEGAMORPHIC_Different",
-              "MEGAMORPHIC -> MEGAMORPHIC_Different",
-              "MEGAMORPHIC -> MEGAMORPHIC_Same",
-              "MEGAMORPHIC -> POLYMORPHIC_Different",
-              "MEGAMORPHIC -> MONOMORPHIC_Different")
-
-new_cols <- c("MONO->MONO (!=)",
-              "MONO->MONO (=)",
-              "MONO->POLY",
-              "MONO->MEGA",
-              "POLY->POLY (!=)",
-              "POLY->POLY (=)",
-              "POLY->MONO",
-              "POLY->MEGA",
-              "MEGA->MEGA (!=)",
-              "MEGA->MEGA (=)",
-              "MEGA->POLY",
-              "MEGA->MONO")
-
-
-transition_data <- transpose(transition_data, keep.names = "Benchmark", make.names = "Transition")
-setnames(transition_data, old_cols, new_cols, skip_absent = TRUE)
+  
+  old_cols <- c("MONOMORPHIC -> MONOMORPHIC_Different",
+                "MONOMORPHIC -> MONOMORPHIC_Same",
+                "MONOMORPHIC -> POLYMORPHIC_Different",
+                "MONOMORPHIC -> MEGAMORPHIC_Different",
+                "POLYMORPHIC -> POLYMORPHIC_Different",
+                "POLYMORPHIC -> POLYMORPHIC_Same",
+                "POLYMORPHIC -> MONOMORPHIC_Different",
+                "POLYMORPHIC -> MEGAMORPHIC_Different",
+                "MEGAMORPHIC -> MEGAMORPHIC_Different",
+                "MEGAMORPHIC -> MEGAMORPHIC_Same",
+                "MEGAMORPHIC -> POLYMORPHIC_Different",
+                "MEGAMORPHIC -> MONOMORPHIC_Different")
+  
+  new_cols <- c("MONO->MONO (!=)",
+                "MONO->MONO (=)",
+                "MONO->POLY",
+                "MONO->MEGA",
+                "POLY->POLY (!=)",
+                "POLY->POLY (=)",
+                "POLY->MONO",
+                "POLY->MEGA",
+                "MEGA->MEGA (!=)",
+                "MEGA->MEGA (=)",
+                "MEGA->POLY",
+                "MEGA->MONO")
+  
+  
+  transition_data <- transpose(transition_data, keep.names = "Benchmark", make.names = "Transition")
+  setnames(transition_data, old_cols, new_cols, skip_absent = TRUE)
+} else {
+  transition_data <- data.table(
+    "Benchmark" = benchmark_name,
+    "MONO->MONO (!=)" = NA, 
+    "MONO->MONO (=)" = NA,
+    "Times.Splitted" = NA
+  )
+}
 
 ############################################## MAIN TABLES ############################################## 
 ###### SUMMARY TABLE ONE
@@ -185,7 +196,7 @@ split_aux <- dcast(split_aux, Benchmark ~ Split.Num.Targets, value.var = c("Spli
 
 table_one <-  table_one[split_aux, on = "Benchmark"]
 
-transition_data[ , "Times.Splitted" := rowSums(.SD), .SDcols=is.numeric]
+setDT(transition_data)[ , "Times.Splitted" := rowSums(.SD), .SDcols=is.numeric]
 table_one <-  table_one[transition_data[, c("Benchmark","Times.Splitted")]]
 
 ###### SUMMARY TABLE TWO
