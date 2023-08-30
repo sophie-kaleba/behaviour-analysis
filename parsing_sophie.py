@@ -50,9 +50,17 @@ def parse_bench_group(group):
 
 
 def main(argv):
+    start_idx = 0
     f = open(argv[1], "r")
     lines = [l.strip() for l in f.readlines()]
-    main_lines = lines[9:]
+
+    for l in lines:
+        # sometimes the header is longer
+        start_idx +=1
+        if (l.startswith('======================')):
+            break
+    
+    main_lines = lines[start_idx:]
     start_str = get_start_str(lines[:4])
 
     groups = get_groups(main_lines)
