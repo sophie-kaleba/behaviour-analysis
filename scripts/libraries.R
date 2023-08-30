@@ -3,7 +3,7 @@ writeLines("[INFO] Loading Libraries")
 load_and_install_if_necessary <- function(package_name) {
   if (!suppressPackageStartupMessages(library(package_name, character.only=TRUE, logical.return=TRUE))) {
     cat(paste0("Package ", package_name, " not found. Will install it."))
-    install.packages(package_name)
+    install.packages(package_name, repos="http://R-Forge.R-project.org", dependencies = TRUE)
     library(package_name, character.only=TRUE)
   }
 }
