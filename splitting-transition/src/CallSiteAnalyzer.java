@@ -62,8 +62,7 @@ public class CallSiteAnalyzer {
                 Integer.toString(ct.numberReceivers()),
                 Integer.toString(union),
                 Integer.toString(intersect),
-                benchmark.name,
-                Integer.toString(site.siteID)});
+                benchmark.name});
     }
 
     public static void setTargetStatus(CallTarget ct) {
@@ -84,10 +83,9 @@ public class CallSiteAnalyzer {
         int startID = Integer.parseInt(row[4]);
         int endID = Integer.parseInt(row[5]);
         String receiver = row[6];
-        int siteID = Integer.parseInt(row[7]);
 
         Benchmark currentBenchmark = new Benchmark(benchmark);
-        CallSite currentSite = new CallSite(sourceSection, symbol, siteID);
+        CallSite currentSite = new CallSite(sourceSection, symbol);
         CallTarget currentTarget = new CallTarget(targetAddress, startID, endID, receiver);
         if (!benchmarks.contains(currentBenchmark)) {
             benchmarks.add(currentBenchmark);

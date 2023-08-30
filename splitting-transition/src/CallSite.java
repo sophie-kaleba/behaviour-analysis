@@ -7,13 +7,11 @@ import java.util.TreeSet;
 public class CallSite {
     public String sourceSection;
     public String symbol;
-    public int siteID;
     public ArrayList<CallTarget> targets = new ArrayList<>();
 
-    public CallSite(String sourceSection, String symbol, int ID) {
+    public CallSite(String sourceSection, String symbol) {
         this.sourceSection = sourceSection;
         this.symbol = symbol;
-        this.siteID = ID;
     }
 
     public ArrayList<CallTarget> getTargets() {
@@ -42,7 +40,7 @@ public class CallSite {
             return true;
         } else if (o != null && this.getClass() == o.getClass()) {
             CallSite callSite = (CallSite)o;
-            return Objects.equals(this.sourceSection, callSite.sourceSection) && Objects.equals(this.symbol, callSite.symbol) && Objects.equals(this.siteID, callSite.siteID);
+            return Objects.equals(this.sourceSection, callSite.sourceSection) && Objects.equals(this.symbol, callSite.symbol);
         } else {
             return false;
         }
@@ -50,6 +48,6 @@ public class CallSite {
 
     @Override
     public int hashCode() {
-        return Objects.hash(new Object[]{this.sourceSection, this.symbol, this.siteID, this.targets});
+        return Objects.hash(new Object[]{this.sourceSection, this.symbol, this.targets});
     }
 }
