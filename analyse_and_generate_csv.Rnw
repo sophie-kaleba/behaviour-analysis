@@ -8,7 +8,9 @@ folder_out = args[3]
 keep_startup = as.logical(args[4])
 keep_blocks = as.logical(args[5])
 
-col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver", "Call.Site.ID")
+col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver", "CT.ID")
+# old from the paper
+#col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.Address", "Builtin?", "Observed.Receiver", "Call.Site.ID")
 data <- fread(filename, header = FALSE, sep="\t", col.names = col_names)
 benchmark_name <- str_match(filename, "parsed\\_(.*?)\\.log")[2]
 data$Benchmark <- benchmark_name
@@ -22,7 +24,6 @@ if(!keep_blocks) {
 } else {
   data <- data[`Builtin?` %like% "PROC|LAMBDA|block"]
   data$Symbol <- "closure"
-  data$Call.Site.ID <- -1
 }
 
 data <- data[, na.omit(.SD)][, Call.ID := 1:.N][, lapply(.SD, str_trim)]
@@ -34,16 +35,25 @@ gc()
 
 data[ , 
       `:=`(Num.Receiver.Observed = n_distinct(Observed.Receiver), 
-       Num.Receiver.Original = n_distinct(Original.Receiver)), by=list(Source.Section, Symbol, Call.Site.ID, Benchmark)]
+           Num.Receiver.Original = n_distinct(Original.Receiver)), by=list(Source.Section, Symbol, Benchmark)]
+# olf from the paper
+# data[ , 
+#       `:=`(Num.Receiver.Observed = n_distinct(Observed.Receiver), 
+#        Num.Receiver.Original = n_distinct(Original.Receiver)), by=list(Source.Section, Symbol, Call.Site.ID, Benchmark)]
 
 gc()
 
 setnames(data,"Num.Receiver.Original", "Before.Num.Targets")
 setnames(data,"Num.Receiver.Observed", "TP.Num.Targets")
-data[ , "Split.Num.Targets" := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, Call.Site.ID, CT.Address, Benchmark)]
-data[ , "Times.Splitted" := (n_distinct(CT.Address) - 1), by=list(Source.Section, Symbol, Call.Site.ID)]
-data[ , "Sites.Per.Method" := n_distinct(Source.Section, Symbol, Call.Site.ID, Benchmark), by=list(Observed.Receiver, Symbol)]
-data[ , "Split.Sites.Per.Method" := n_distinct(Source.Section, Symbol, Call.Site.ID, CT.Address, Benchmark), by=list(Observed.Receiver, Symbol)]
+data[ , "Split.Num.Targets" := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, CT.ID, Benchmark)]
+data[ , "Times.Splitted" := (n_distinct(CT.ID) - 1), by=list(Source.Section, Symbol)]
+data[ , "Sites.Per.Method" := n_distinct(Source.Section, Symbol, Benchmark), by=list(Observed.Receiver, Symbol)]
+data[ , "Split.Sites.Per.Method" := n_distinct(Source.Section, Symbol, CT.ID, Benchmark), by=list(Observed.Receiver, Symbol)]
+# old from the paper
+# data[ , "Split.Num.Targets" := n_distinct(Observed.Receiver), by=list(Source.Section, Symbol, Call.Site.ID, CT.Address, Benchmark)]
+# data[ , "Times.Splitted" := (n_distinct(CT.Address) - 1), by=list(Source.Section, Symbol, Call.Site.ID)]
+# data[ , "Sites.Per.Method" := n_distinct(Source.Section, Symbol, Call.Site.ID, Benchmark), by=list(Observed.Receiver, Symbol)]
+# data[ , "Split.Sites.Per.Method" := n_distinct(Source.Section, Symbol, Call.Site.ID, CT.Address, Benchmark), by=list(Observed.Receiver, Symbol)]
 
 gc()
 
@@ -51,11 +61,19 @@ gc()
 split_table <- copy(data)
 
 split_table[ , `:=`(Start.Time = first(Call.ID),
-                    End.Time = last(Call.ID)), by = list(Benchmark, Source.Section, Symbol, Call.Site.ID, CT.Address) ]
+                    End.Time = last(Call.ID)), by = list(Benchmark, Source.Section, Symbol, CT.ID) ]
+
 split_table[, c("Builtin?", "TP.Num.Targets", "Before.Num.Targets", "Split.Num.Targets", "Times.Splitted", "Stage", "Original.Receiver", "Call.ID") := NULL]
-setcolorder(split_table, c("Benchmark", "Source.Section", "Symbol", "CT.Address", "Start.Time", "End.Time", "Observed.Receiver", "Call.Site.ID"))
+setcolorder(split_table, c("Benchmark", "Source.Section", "Symbol", "CT.ID", "Start.Time", "End.Time", "Observed.Receiver"))
 split_table <- unique(split_table)
-setorderv(split_table, c("Benchmark", "Source.Section", "Symbol", "Call.Site.ID", "CT.Address", "Start.Time"))
+setorderv(split_table, c("Benchmark", "Source.Section", "Symbol", "CT.ID", "Start.Time"))
+# old from the paper 
+# split_table[ , `:=`(Start.Time = first(Call.ID),
+#                     End.Time = last(Call.ID)), by = list(Benchmark, Source.Section, Symbol, Call.Site.ID, CT.Address) ]
+# split_table[, c("Builtin?", "TP.Num.Targets", "Before.Num.Targets", "Split.Num.Targets", "Times.Splitted", "Stage", "Original.Receiver", "Call.ID") := NULL]
+# setcolorder(split_table, c("Benchmark", "Source.Section", "Symbol", "CT.Address", "Start.Time", "End.Time", "Observed.Receiver", "Call.Site.ID"))
+# split_table <- unique(split_table)
+# setorderv(split_table, c("Benchmark", "Source.Section", "Symbol", "Call.Site.ID", "CT.Address", "Start.Time"))
 
 # and export it as a csv file so our java program can analyse it
 split_file <-  file.path(folder_out, paste(benchmark_name,"_splitting_data.csv", sep=""))
@@ -72,8 +90,11 @@ setwd(target_dir)
 system2("java", paste(" CallSiteAnalyzer",split_file, out_split_file, sep=" "))
 
 setwd(prev_wd)
-row_names <- c("Source.Section", "Symbol", "Start.ID", "End.ID", "Start.State", "End.State", "Start.Cache.Size", "End.Cache.Size", "Union.Size", "Intersect.Size", "Benchmark", "Call.Site.ID")
+row_names <- c("Source.Section", "Symbol", "Start.ID", "End.ID", "Start.State", "End.State", "Start.Cache.Size", "End.Cache.Size", "Union.Size", "Intersect.Size", "Benchmark")
 transition_data <- fread(out_split_file, header = FALSE, sep=",", col.names=row_names)
+# old from paper
+# row_names <- c("Source.Section", "Symbol", "Start.ID", "End.ID", "Start.State", "End.State", "Start.Cache.Size", "End.Cache.Size", "Union.Size", "Intersect.Size", "Benchmark", "Call.Site.ID")
+# transition_data <- fread(out_split_file, header = FALSE, sep=",", col.names=row_names)
 
 transition_data[ , "Transition.Type" := (fcase(
   (Start.State == 'POLYMORPHIC' & End.State == 'POLYMORPHIC' & Intersect.Size == Union.Size), "Same",
@@ -94,7 +115,8 @@ detailed_transition_data_same <- transition_data[Transition.Type == "Same"][ , `
                                                                                     Intersect.Size = NULL)]
 
 # from there, the data get summarized
-transition_data <- transition_data[ , .("Num.Transitions" = n_distinct(Source.Section, Symbol, Call.Site.ID)), by=list(Benchmark, Start.State, End.State, Transition.Type)]
+transition_data <- transition_data[ , .("Num.Transitions" = n_distinct(Source.Section, Symbol)), by=list(Benchmark, Start.State, End.State, Transition.Type)]
+#transition_data <- transition_data[ , .("Num.Transitions" = n_distinct(Source.Section, Symbol, Call.Site.ID)), by=list(Benchmark, Start.State, End.State, Transition.Type)]
 
 transition_data <- transition_data %>% 
     tidyr::unite("Transition", Start.State:End.State, remove = TRUE, sep=" -> ") %>%
@@ -142,14 +164,14 @@ setnames(transition_data, old_cols, new_cols, skip_absent = TRUE)
 # We should ouput a csv containing this table, that will later be read and aggregated with other benchmarks
 # The merging should auto fill missing columns with 0s (not NAs)
 
-table_one <- data[ , .("Before.Num.Call.Sites" = n_distinct(Source.Section, Symbol, Call.Site.ID),
+table_one <- data[ , .("Before.Num.Call.Sites" = n_distinct(Source.Section, Symbol),
                        "Before.Num.Calls" = n_distinct(Call.ID)),
                         by = list(Benchmark, Before.Num.Targets)]
 table_one <- dcast(table_one, Benchmark ~ Before.Num.Targets, value.var = c("Before.Num.Calls", "Before.Num.Call.Sites"))
 
 if(!keep_blocks) {
   tp_aux <- data[ , .("TP.Num.Calls" = n_distinct(Call.ID), 
-                      "TP.Num.Call.Sites" = n_distinct(Source.Section, Symbol, Call.Site.ID)),
+                      "TP.Num.Call.Sites" = n_distinct(Source.Section, Symbol)),
                   by = list(Benchmark, TP.Num.Targets)]
   tp_aux <- dcast(tp_aux,  Benchmark ~ TP.Num.Targets, value.var = c("TP.Num.Calls", "TP.Num.Call.Sites"))
                   
@@ -157,7 +179,7 @@ if(!keep_blocks) {
 }
 
 split_aux <- data[ , .(Split.Num.Calls = n_distinct(Call.ID), 
-                       Split.Num.Call.Sites = n_distinct(Source.Section, Symbol, Call.Site.ID)), #This is weird - is this correct?
+                       Split.Num.Call.Sites = n_distinct(Source.Section, Symbol)), #This is weird - is this correct?
                    by = list(Benchmark, Split.Num.Targets)]
 split_aux <- dcast(split_aux, Benchmark ~ Split.Num.Targets, value.var = c("Split.Num.Calls", "Split.Num.Call.Sites"))
 
@@ -197,8 +219,8 @@ table_caller_polymorphism <- table_caller_polymorphism %>% select(c("Benchmark",
 
 detailed_table_caller_polymorphism <- data %>% 
   filter(Sites.Per.Method >= 3 & Split.Sites.Per.Method >= 3) %>% 
-  select(Benchmark, Source.Section, Observed.Receiver, Symbol, Call.Site.ID, CT.Address, Sites.Per.Method, Split.Sites.Per.Method) %>%
-  distinct(Benchmark, Source.Section, Observed.Receiver, Symbol, Call.Site.ID, CT.Address, .keep_all = TRUE)
+  select(Benchmark, Source.Section, Observed.Receiver, Symbol,CT.Address, Sites.Per.Method, Split.Sites.Per.Method) %>%
+  distinct(Benchmark, Source.Section, Observed.Receiver, Symbol, CT.Address, .keep_all = TRUE)
 
 ############################################## DISTRIBUTION ###############################################
 sum_bench <- build_summary_df(data$Before.Num.Targets, benchmark_name)
@@ -211,7 +233,7 @@ if(!keep_blocks) {
 
 distribution_plots_dynamic <- build_distribution_plots(data, metrics)
 
-static_sites <- data %>% distinct(Source.Section, Symbol, Call.Site.ID, .keep_all = TRUE)
+static_sites <- data %>% distinct(Source.Section, Symbol, .keep_all = TRUE)
 distribution_plots_static <- build_distribution_plots(static_sites, metrics)
 
 ############################################## SAVE AS CSV ###############################################
