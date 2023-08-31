@@ -19,9 +19,10 @@
 source("./scripts/libraries.R", chdir=TRUE)
 source("./scripts/merge.R", chdir=TRUE)
 
-# folder_status <- "../results/09-11-22_17-39-43/"
-# folder_path <- "Methods"
-# folder_blocks <- "Blocks"
+#folder_status <- "../results/31-08-23_10-07-03"
+#folder_status <- "../results/13-10-22_23-01-05/"
+#folder_path <- "Methods"
+#folder_blocks <- "Blocks"
 
 # Coverage data
 coverage_data <- load_all_tables(folder_status, FALSE, folder_pattern="Coverage", patt="global") 
@@ -74,10 +75,29 @@ before <- data %>%
   select(1:6, contains("Before"))
 names(before) <- sub('(\\d+)_([a-zA-Z]+).(\\D+)_', '\\1_\\3', names(before))
 before <- before[ , gtools::mixedsort(names(before))] %>% select(c("Benchmark", "Num.Stmt", "Stmt.Cov", "Num.Fn", "Fn.Cov", "Times.Splitted"), everything())
-before <- sum_poly(before)  
+before <- sum_poly(before)
 
-#write.csv(before %>% select(Benchmark, Total.Calls), "simple_data.csv", sep=" ")
+sites_per_targets <- before %>%
+  select(Benchmark, contains("Num.Call.Sites"))
+names(sites_per_targets) <- sub('(\\d+)_([a-zA-Z]+).(\\D+)', '\\1', names(sites_per_targets))
+sites_per_targets <- sites_per_targets %>% tidyr::gather(key = Num.Targets, value = Num.Sites, -Benchmark)
 
+calls_per_targets <- before %>%
+  select(Benchmark, contains("Num.Calls"))
+names(calls_per_targets) <- sub('(\\d+)_([a-zA-Z]+).(\\D+)', '\\1', names(calls_per_targets))
+calls_per_targets <- calls_per_targets %>% 
+  tidyr::gather(key = Num.Targets, value = Num.Calls, -Benchmark) %>%
+  dplyr::mutate("Num.Targets" = as.numeric(Num.Targets), "Num.Calls" = as.numeric(Num.Calls))
+#plots as facet of bar plots
+
+#calls_per_targets <- calls_per_targets %>% filter(Benchmark == "DeltaBlue")
+p <- ggplot(data=calls_per_targets, aes(x=Num.Targets, y=Num.Calls)) +
+  geom_bar(stat="identity", fill="steelblue") +
+  scale_y_log10() +
+  theme_minimal() #+ theme(axis.text.x = element_text(angle=90, hjust=1))
+
+p <- p + ggforce::facet_grid_paginate("Benchmark", ncol = 3, nrow = 4, page = 1, scales = "free_y")
+  
 tp <- data %>%
   select(1:6, contains("TP"))
 names(tp) <- sub('(\\d+)_([a-zA-Z]+).(\\D+)_', '\\1_\\3', names(tp))
@@ -96,6 +116,15 @@ splitting <- sum_poly(splitting)
 table_one <- before %>% 
   cluster_benchmarks() %>%
   select(Benchmark, Num.Stmt, Stmt.Cov, Num.Fn, Fn.Cov, Max.Target, Mono.Call.Sites, Mono.Calls, Poly.Call.Sites, Poly.Calls, Mega.Call.Sites, Mega.Calls, Total.Calls, Freq.Poly.Calls, Total.Call.Sites, Freq.Poly.Call.Sites, Cluster.Type)
+
+list_mega <- table_one %>% select(Benchmark, Cluster.Type) %>% filter(Cluster.Type == "Polymorphic.Small")
+list_mega <- list_mega$Benchmark
+
+s <- "c("
+for (e in list_mega) {
+  s <- paste(s, "'", e,"'", ", ", sep="")
+}
+
 
 # This is required so that the group of benchmark stays the same across all tables
 benchmark_types <- table_one %>%
