@@ -1,12 +1,12 @@
 source("./scripts/libraries.R", chdir=TRUE)
 
 args = commandArgs(trailingOnly=TRUE)
-benchmark_name = args[1]
-filename = args[2]
+benchmark_name = "Bounce" #args[1]
+filename = args[2] #"/home/sopi/Documents/Side_projects/ruby-cs-analyser/results/latest/parsed_Bounce.log" #args[2]
 
-folder_out = args[3]
-keep_startup = as.logical(args[4])
-keep_blocks = as.logical(args[5])
+folder_out = args[3] #"/home/sopi/Documents/Side_projects/ruby-cs-analyser/results/latest" #args[3]
+keep_startup =as.logical(args[4])# FALSE #as.logical(args[4])
+keep_blocks = as.logical(args[5])#TRUE #as.logical(args[5])
 
 col_names <- c("Stage", "Symbol", "Original.Receiver", "Source.Section", "CT.ID", "Builtin?", "Observed.Receiver", "CT.Address")
 # old from the paper
@@ -93,12 +93,13 @@ setwd(prev_wd)
 row_names <- c("Source.Section", "Symbol", "Start.ID", "End.ID", "Start.State", "End.State", "Start.Cache.Size", "End.Cache.Size", "Union.Size", "Intersect.Size", "Benchmark")
 
 options(warn=0)
-transition_data <- fread(out_split_file, header = FALSE, sep=",", col.names=row_names)
+transition_data <- fread(out_split_file, header = FALSE, sep=",")
 # old from paper
 # row_names <- c("Source.Section", "Symbol", "Start.ID", "End.ID", "Start.State", "End.State", "Start.Cache.Size", "End.Cache.Size", "Union.Size", "Intersect.Size", "Benchmark", "Call.Site.ID")
 # transition_data <- fread(out_split_file, header = FALSE, sep=",", col.names=row_names)
 
-if (!is.null(transition_data)) {
+if (nrow(transition_data) != 0) {
+  names(transition_data) <- row_names
   transition_data[ , "Transition.Type" := (fcase(
     (Start.State == 'POLYMORPHIC' & End.State == 'POLYMORPHIC' & Intersect.Size == Union.Size), "Same",
     (Start.State == 'MONOMORPHIC' & End.State == 'MONOMORPHIC' & Intersect.Size == Union.Size), "Same",
@@ -158,10 +159,38 @@ if (!is.null(transition_data)) {
 } else {
   transition_data <- data.table(
     "Benchmark" = benchmark_name,
-    "MONO->MONO (!=)" = NA, 
-    "MONO->MONO (=)" = NA,
-    "Times.Splitted" = NA
+    "MONO->MONO (!=)" = 0, 
+    "MONO->MONO (=)" = 0,
+    "Times.Splitted" = 0
   )
+  
+  detailed_transition_data <- data.frame(
+    "Source.Section" = "mock",
+    "Symbol" = "mock",
+    "Start.ID" =0,
+    "End.ID" =0,
+    "Start.State"= "MONOMORPHIC",
+    "End.State" = "MONOMORPHIC",
+    "Start.Cache.Size" =0,
+    "End.Cache.Size" =0,
+    "Union.Size" =0,
+    "Intersect.Size" = 0,
+    "Benchmark" = benchmark_name,
+    "Transition.Type" = "Same")
+  
+  detailed_transition_data_same <- data.frame(
+    "Source.Section" = "mock",
+    "Symbol" = "mock",
+    "Start.ID" =0,
+    "End.ID" =0,
+    "Start.State"= "MONOMORPHIC",
+    "End.State" = "MONOMORPHIC",
+    "Start.Cache.Size" =0,
+    "End.Cache.Size" =0,
+    "Union.Size" =0,
+    "Intersect.Size" = 0,
+    "Benchmark" = benchmark_name,
+    "Transition.Type" = "Same")
 }
 
 ############################################## MAIN TABLES ############################################## 
